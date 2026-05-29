@@ -42,6 +42,10 @@ export class VersioningMiddleware implements NestMiddleware {
 
       const deprecation = DEPRECATED_VERSIONS[usedVersion];
       if (deprecation) {
+        // Check if sunset date has been exceeded
+        const now = new Date();
+        const sunsetDate = new Date(deprecation.sunset);
+
         res.setHeader('Deprecation', 'true');
         res.setHeader('Sunset', deprecation.sunset);
         res.setHeader('X-Deprecation-Notice', deprecation.message);
@@ -49,9 +53,25 @@ export class VersioningMiddleware implements NestMiddleware {
           'Link',
           `</api/v${CURRENT_VERSION}/docs>; rel="successor-version"`,
         );
+
+        // Log deprecation warning
         this.logger.warn(
           `Deprecated API v${usedVersion} accessed: ${req.method} ${req.url}`,
         );
+
+        // If sunset date has passed, optionally fail with warning header
+        if (now > sunsetDate) {
+          res.setHeader('X-Sunset-Enforced', 'true');
+          res.setHeader(
+            'X-Sunset-Message',
+            `API v${usedVersion} is no longer supported as of ${deprecation.sunset}. Please migrate to v${CURRENT_VERSION}.`,
+          );
+          this.logger.error(
+            `SUNSET REACHED: API v${usedVersion} sunset date (${deprecation.sunset}) has passed`,
+          );
+          // Note: You could optionally return 410 Gone here if strict enforcement is desired
+          // return res.status(410).json({ error: 'API version no longer supported' });
+        }
       }
     }
 

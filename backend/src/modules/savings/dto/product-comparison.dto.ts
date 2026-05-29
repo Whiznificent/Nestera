@@ -5,7 +5,10 @@ export class HistoricalPerformanceDto {
   @ApiProperty({ example: 2023, description: 'Year of the performance record' })
   year: number;
 
-  @ApiProperty({ example: 10.5, description: 'Annual return percentage for that year' })
+  @ApiProperty({
+    example: 10.5,
+    description: 'Annual return percentage for that year',
+  })
   return: number;
 }
 
@@ -51,6 +54,11 @@ export class ProductComparisonItemDto {
     description: 'Historical annual performance data',
   })
   historicalPerformance: HistoricalPerformanceDto[];
+
+  @ApiProperty({
+    description: 'Estimated earnings based on provided amount and duration',
+  })
+  projectedEarnings: number;
 }
 
 export class ProductComparisonResponseDto {
@@ -59,4 +67,13 @@ export class ProductComparisonResponseDto {
 
   @ApiProperty({ description: 'Whether this response was served from cache' })
   cached: boolean;
+
+  @ApiPropertyOptional({
+    description: 'The recommended product based on earnings and risk',
+    example: { productId: 'uuid', reason: 'Highest projected returns' },
+  })
+  recommendation?: {
+    productId: string;
+    reason: string;
+  };
 }

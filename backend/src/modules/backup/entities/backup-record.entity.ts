@@ -10,6 +10,7 @@ export enum BackupStatus {
   FAILED = 'failed',
   RESTORE_TEST_PASSED = 'restore_test_passed',
   RESTORE_TEST_FAILED = 'restore_test_failed',
+  VERIFICATION_FAILED = 'verification_failed',
 }
 
 @Entity('backup_records')
@@ -37,6 +38,15 @@ export class BackupRecord {
 
   @Column({ type: 'timestamp', nullable: true })
   expiresAt?: Date;
+
+  @Column({ nullable: true })
+  checksumSha256?: string;
+
+  @Column({ type: 'timestamp', nullable: true })
+  lastVerifiedAt?: Date;
+
+  @Column({ nullable: true })
+  restoreTestDurationMs?: number;
 
   @CreateDateColumn()
   createdAt: Date;

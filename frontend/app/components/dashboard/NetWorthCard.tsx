@@ -1,8 +1,11 @@
 "use client";
 
 import React from "react";
+import { useWallet } from "../../context/WalletContext";
 
 const NetWorthCard: React.FC = () => {
+  const { totalUsdValue, isConnected, isBalancesLoading } = useWallet();
+
   return (
     <div className="relative overflow-hidden rounded-[18px] p-28 min-h-[160px] shadow-[0_10px_30px_rgba(2,12,14,0.6)] backdrop-blur-[6px] border border-[rgba(6,110,110,0.15)] bg-linear-to-b from-[rgba(4,20,22,0.85)] to-[rgba(6,18,20,0.75)] text-[#e6ffff]">
       {/* Wave SVG sits at the back */}
@@ -33,16 +36,29 @@ const NetWorthCard: React.FC = () => {
           <div
             className="px-3 py-2 rounded-2xl font-bold text-[#8ef4ef] inline-flex gap-2 items-center text-sm bg-linear-to-r from-[rgba(3,116,116,0.22)] to-[rgba(6,140,140,0.14))]"
           >
-            + $1,240.50{" "}
-            <span className="text-[#cfe] text-xs font-semibold">(+5.4%)</span>
+            + $0.00{" "}
+            <span className="text-[#cfe] text-xs font-semibold">(0.0%)</span>
           </div>
         </div>
 
-        <div className="text-5xl font-extrabold mt-3 tracking-tight text-white">
-          $24,593.82
+        <div className="mt-3 text-4xl font-extrabold tracking-tight text-white sm:text-5xl">
+          {isConnected ? (
+            isBalancesLoading && totalUsdValue === 0 ? (
+              <span className="inline-block h-12 w-52 animate-pulse rounded-lg bg-white/10" />
+            ) : (
+              `$${totalUsdValue.toLocaleString(undefined, {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              })}`
+            )
+          ) : (
+            "$0.00"
+          )}
         </div>
 
-        <div className="mt-2 text-[#95b7b7] text-sm">vs last month</div>
+        <div className="mt-2 text-[#95b7b7] text-sm">
+          {isBalancesLoading ? "Loading wallet valuation..." : "vs last month"}
+        </div>
       </div>
     </div>
   );

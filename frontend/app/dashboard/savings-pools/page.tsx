@@ -1,13 +1,23 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
-import { Landmark, Search, ChevronDown, LayoutGrid, List } from "lucide-react";
+import React, { useEffect, useMemo, useState } from "react";
+import {
+  Landmark,
+  Loader2,
+  Search,
+  ChevronDown,
+  LayoutGrid,
+  List,
+} from "lucide-react";
 import SavingsPoolCard, {
   type SavingsPool,
 } from "@/app/components/dashboard/SavingsPoolCard";
+import { useToast } from "@/app/context/ToastContext";
 
 export default function GoalBasedSavingsPage() {
   const [searchQuery, setSearchQuery] = useState("");
+  const [isLoading, setIsLoading] = useState(true);
+  const toast = useToast();
   // Savings pools data
   const savingsPools: SavingsPool[] = [
     {
@@ -88,9 +98,13 @@ export default function GoalBasedSavingsPage() {
   }, [searchQuery, savingsPools]);
 
   const handleDeposit = (poolId: string) => {
-    console.log(`Deposit clicked for pool: ${poolId}`);
-    // Add your deposit logic here
+    toast.info("Deposit flow opening", `Selected pool: ${poolId}`);
   };
+
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => setIsLoading(false), 700);
+    return () => window.clearTimeout(timeoutId);
+  }, []);
 
   return (
     <div className="w-full max-w-7xl mx-auto pb-20">
@@ -111,16 +125,16 @@ export default function GoalBasedSavingsPage() {
         </div>
 
         {/* View Toggles & Actions */}
-        <div className="flex items-center gap-3">
-          <div className="flex bg-[#0e2330] p-1 rounded-xl border border-white/5">
-            <button className="p-2 rounded-lg bg-cyan-500/10 text-cyan-400 shadow-sm">
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex bg-[#0e2330] p-1 rounded-xl border border-white/5" role="group" aria-label="View mode toggle">
+            <button className="min-h-11 p-2 rounded-lg bg-cyan-500/10 text-cyan-400 shadow-sm" aria-label="Grid view" aria-pressed="true">
               <LayoutGrid size={18} />
             </button>
-            <button className="p-2 rounded-lg text-[#5e8c96] hover:text-white transition-colors">
+            <button className="min-h-11 p-2 rounded-lg text-[#5e8c96] hover:text-white transition-colors" aria-label="List view" aria-pressed="false">
               <List size={18} />
             </button>
           </div>
-          <button className="px-5 py-2.5 bg-cyan-500 hover:bg-cyan-400 text-[#061a1a] font-bold rounded-xl transition-all shadow-lg active:scale-95">
+          <button className="min-h-11 rounded-xl bg-cyan-500 px-5 py-2.5 font-bold text-[#061a1a] shadow-lg transition-all hover:bg-cyan-400 active:scale-95" aria-label="Create new goal">
             Create New Goal
           </button>
         </div>
@@ -128,7 +142,7 @@ export default function GoalBasedSavingsPage() {
 
       {/* Search & Filters Row */}
       <div className="flex flex-wrap items-center gap-4 mb-8">
-        <div className="relative flex-1 min-w-[300px]">
+        <div className="relative min-w-0 flex-1">
           <Search
             className="absolute left-4 top-1/2 -translate-y-1/2 text-[#5e8c96]"
             size={18}
@@ -154,7 +168,7 @@ export default function GoalBasedSavingsPage() {
                 filter.active
                   ? "bg-cyan-500/5 border-cyan-500/20 text-cyan-400"
                   : "bg-[#0e2330] border-white/5 text-[#5e8c96] hover:border-white/10 hover:text-white"
-              }`}
+              } min-h-11`}
             >
               <span className="text-sm font-medium">{filter.label}</span>
               <ChevronDown size={14} opacity={0.7} />
@@ -173,8 +187,22 @@ export default function GoalBasedSavingsPage() {
         </span>
       </div>
 
-      {/* Pools Grid */}
-      {filteredPools.length > 0 ? (
+      {isLoading ? (
+        <div className="space-y-4" aria-live="polite" aria-busy="true">
+          <div className="inline-flex items-center gap-2 text-xs text-[#7fa9b0]">
+            <Loader2 size={14} className="animate-spin text-cyan-400" />
+            Loading available pools...
+          </div>
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
+            {[1, 2, 3].map((item) => (
+              <div
+                key={item}
+                className="h-[260px] animate-pulse rounded-2xl border border-white/5 bg-white/5"
+              />
+            ))}
+          </div>
+        </div>
+      ) : filteredPools.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredPools.map((pool) => (
             <SavingsPoolCard

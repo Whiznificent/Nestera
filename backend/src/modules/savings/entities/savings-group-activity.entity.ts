@@ -7,7 +7,7 @@ import {
   JoinColumn,
 } from 'typeorm';
 import { User } from '../../user/entities/user.entity';
-import { SavingsGroup } from './savings-group.entity';
+import { GroupSavingsPool } from './group-savings-pool.entity';
 
 export enum SavingsGroupActivityType {
   CREATED = 'CREATED',
@@ -44,11 +44,11 @@ export class SavingsGroupActivity {
   @CreateDateColumn()
   createdAt: Date;
 
-  @ManyToOne(() => SavingsGroup, (group) => group.activities, {
+  @ManyToOne(() => GroupSavingsPool, (group) => group.activities, {
     onDelete: 'CASCADE',
   })
   @JoinColumn({ name: 'groupId' })
-  group: SavingsGroup;
+  group: GroupSavingsPool;
 
   @ManyToOne(() => User)
   @JoinColumn({ name: 'userId' })

@@ -98,7 +98,7 @@ export default function GoalBasedSavingsPage() {
     filtered = filtered.sort((a, b) =>
       sortBy === "Target"
         ? parseInt(b.targetAmount.replace(/[$,]/g, ""), 10) -
-          parseInt(a.targetAmount.replace(/[$,]/g, ""), 10)
+        parseInt(a.targetAmount.replace(/[$,]/g, ""), 10)
         : b.progressPercent - a.progressPercent,
     );
     return filtered;
@@ -206,9 +206,15 @@ export default function GoalBasedSavingsPage() {
             contributionFrequency={featuredGoal.contributionFrequency}
             nextContributionLabel={featuredGoal.nextContributionLabel}
             nextContributionValue={featuredGoal.nextContributionValue}
-            onAddFunds={() => console.log("Add funds", featuredGoal.id)}
-            onViewDetails={() => console.log("View details", featuredGoal.id)}
-            onOverflowAction={() => console.log("More actions", featuredGoal.id)}
+            onAddFunds={() => {
+              // TODO: Implement add funds functionality
+            }}
+            onViewDetails={() => {
+              // TODO: Implement view details functionality
+            }}
+            onOverflowAction={() => {
+              // TODO: Implement overflow actions menu
+            }}
           />
         </div>
 
@@ -246,41 +252,42 @@ export default function GoalBasedSavingsPage() {
               Sort: {sortBy}
               <ChevronDown size={14} className="opacity-70" />
             </button>
-            <div className="flex bg-[#0e2330] p-1 rounded-xl border border-white/5">
-              <button
-                type="button"
-                onClick={() => setViewMode("grid")}
-                className={`p-2 rounded-lg transition-colors ${
-                  viewMode === "grid"
-                    ? "bg-cyan-500/10 text-cyan-400"
-                    : "text-[#5e8c96] hover:text-white"
-                }`}
-              >
-                <LayoutGrid size={18} />
-              </button>
-              <button
-                type="button"
-                onClick={() => setViewMode("list")}
-                className={`p-2 rounded-lg transition-colors ${
-                  viewMode === "list"
-                    ? "bg-cyan-500/10 text-cyan-400"
-                    : "text-[#5e8c96] hover:text-white"
-                }`}
-              >
-                <List size={18} />
-              </button>
-            </div>
+<div className="flex bg-[#0e2330] p-1 rounded-xl border border-white/5" role="group" aria-label="View mode toggle">
+               <button
+                 type="button"
+                 onClick={() => setViewMode("grid")}
+                 className={`p-2 rounded-lg transition-colors ${viewMode === "grid"
+                   ? "bg-cyan-500/10 text-cyan-400"
+                   : "text-[#5e8c96] hover:text-white"
+                   }`}
+                 aria-label="Grid view"
+                 aria-pressed={viewMode === "grid"}
+               >
+                 <LayoutGrid size={18} />
+               </button>
+               <button
+                 type="button"
+                 onClick={() => setViewMode("list")}
+                 className={`p-2 rounded-lg transition-colors ${viewMode === "list"
+                   ? "bg-cyan-500/10 text-cyan-400"
+                   : "text-[#5e8c96] hover:text-white"
+                   }`}
+                 aria-label="List view"
+                 aria-pressed={viewMode === "list"}
+               >
+                 <List size={18} />
+               </button>
+             </div>
           </div>
         </div>
 
         <h2 className="text-xl md:text-2xl text-white font-bold mb-5">Your Savings Goals</h2>
 
         <div
-          className={`grid gap-5 ${
-            viewMode === "grid"
-              ? "grid-cols-1 md:grid-cols-2 xl:grid-cols-3"
-              : "grid-cols-1"
-          }`}
+          className={`grid gap-5 ${viewMode === "grid"
+            ? "grid-cols-1 md:grid-cols-2 xl:grid-cols-3"
+            : "grid-cols-1"
+            }`}
         >
           {filteredGoals.map((goal) => (
             <GoalCard
@@ -296,9 +303,15 @@ export default function GoalBasedSavingsPage() {
               contributionFrequency={goal.contributionFrequency}
               nextContributionLabel={goal.nextContributionLabel}
               nextContributionValue={goal.nextContributionValue}
-              onAddFunds={() => console.log("Add funds", goal.id)}
-              onViewDetails={() => console.log("View details", goal.id)}
-              onOverflowAction={() => console.log("More actions", goal.id)}
+              onAddFunds={() => {
+                // TODO: Implement add funds functionality
+              }}
+              onViewDetails={() => {
+                // TODO: Implement view details functionality
+              }}
+              onOverflowAction={() => {
+                // TODO: Implement overflow actions menu
+              }}
             />
           ))}
         </div>

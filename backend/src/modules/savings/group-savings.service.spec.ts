@@ -3,13 +3,13 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
 import { GroupSavingsService } from './group-savings.service';
 import {
-  SavingsGroup,
-  SavingsGroupStatus,
-} from './entities/savings-group.entity';
+  GroupSavingsPool,
+  PoolStatus,
+} from './entities/group-savings-pool.entity';
 import {
-  SavingsGroupMember,
-  SavingsGroupRole,
-} from './entities/savings-group-member.entity';
+  GroupPoolMember,
+  MemberRole,
+} from './entities/group-pool-member.entity';
 import {
   SavingsGroupActivity,
   SavingsGroupActivityType,
@@ -55,11 +55,11 @@ describe('GroupSavingsService', () => {
       providers: [
         GroupSavingsService,
         {
-          provide: getRepositoryToken(SavingsGroup),
+          provide: getRepositoryToken(GroupSavingsPool),
           useValue: groupRepository,
         },
         {
-          provide: getRepositoryToken(SavingsGroupMember),
+          provide: getRepositoryToken(GroupPoolMember),
           useValue: memberRepository,
         },
         {
@@ -74,38 +74,45 @@ describe('GroupSavingsService', () => {
   });
 
   describe('createGroup', () => {
-    it('should create a group and add creator as admin', async () => {
-      const dto = { name: 'Test Group', targetAmount: 1000 };
+    it('should create a group pool and add creator as owner', async () => {
+      const dto = {
+        name: 'Test Pool',
+        targetAmount: 1000,
+        productId: 'prod-1',
+        multisigAddress: 'G...XYZ',
+        requiredSignatures: 2,
+        totalSigners: 3,
+      };
       const userId = 'user-1';
 
       const result = await service.createGroup(userId, dto);
 
       expect(dataSource.transaction).toHaveBeenCalled();
-      expect(result.name).toBe('Test Group');
+      expect(result.name).toBe('Test Pool');
       expect(result.creatorId).toBe(userId);
     });
   });
 
   describe('joinGroup', () => {
-    it('should allow a user to join an open group', async () => {
+    it('should allow a user to join an active group pool', async () => {
       const userId = 'user-2';
       const groupId = 'group-1';
       groupRepository.findOneBy.mockResolvedValue({
         id: groupId,
-        status: SavingsGroupStatus.OPEN,
+        status: PoolStatus.ACTIVE,
       });
       memberRepository.findOneBy.mockResolvedValue(null);
 
       const result = await service.joinGroup(userId, groupId);
 
       expect(result.userId).toBe(userId);
-      expect(result.groupId).toBe(groupId);
+      expect(result.poolId).toBe(groupId);
     });
 
     it('should throw ConflictException if already a member', async () => {
       groupRepository.findOneBy.mockResolvedValue({
         id: 'group-1',
-        status: SavingsGroupStatus.OPEN,
+        status: PoolStatus.ACTIVE,
       });
       memberRepository.findOneBy.mockResolvedValue({ id: 'member-1' });
 
@@ -126,21 +133,21 @@ describe('GroupSavingsService', () => {
       memberRepository.findOneBy
         .mockResolvedValueOnce({
           id: 'admin-member',
-          role: SavingsGroupRole.ADMIN,
+          role: MemberRole.OWNER,
         })
         .mockResolvedValueOnce(null);
 
       const result = await service.inviteMember(adminId, groupId, dto);
 
       expect(result.userId).toBe(targetUserId);
-      expect(result.role).toBe(SavingsGroupRole.MEMBER);
+      expect(result.role).toBe(MemberRole.MEMBER);
     });
 
     it('should throw ForbiddenException if non-admin invites', async () => {
       groupRepository.findOneBy.mockResolvedValue({ id: 'group-1' });
       memberRepository.findOneBy.mockResolvedValue({
         id: 'member-1',
-        role: SavingsGroupRole.MEMBER,
+        role: MemberRole.MEMBER,
       });
 
       await expect(
@@ -150,56 +157,60 @@ describe('GroupSavingsService', () => {
   });
 
   describe('contribute', () => {
-    it('should update group and member amounts', async () => {
+    it('should update group pool and member contribution amounts', async () => {
       const userId = 'user-1';
       const groupId = 'group-1';
       const dto = { amount: 100 };
 
       groupRepository.findOneBy.mockResolvedValue({
         id: groupId,
-        status: SavingsGroupStatus.OPEN,
-        currentAmount: 0,
+        status: PoolStatus.ACTIVE,
+        currentBalance: 0,
         targetAmount: 1000,
       });
       memberRepository.findOneBy.mockResolvedValue({
-        groupId,
+        poolId: groupId,
         userId,
-        contributionAmount: 0,
+        totalContributed: 0,
       });
 
       const result = await service.contribute(userId, groupId, dto);
 
-      expect(Number(result.currentAmount)).toBe(100);
+      expect(Number(result.currentBalance)).toBe(100);
     });
 
-    it('should complete group if target reached', async () => {
+    it('should track cumulative contributions correctly', async () => {
       groupRepository.findOneBy.mockResolvedValue({
         id: 'group-1',
-        status: SavingsGroupStatus.OPEN,
-        currentAmount: 950,
+        status: PoolStatus.ACTIVE,
+        currentBalance: 950,
         targetAmount: 1000,
       });
-      memberRepository.findOneBy.mockResolvedValue({ contributionAmount: 0 });
+      memberRepository.findOneBy.mockResolvedValue({
+        poolId: 'group-1',
+        totalContributed: 200,
+      });
 
       const result = await service.contribute('user-1', 'group-1', {
         amount: 50,
       });
 
-      expect(result.status).toBe(SavingsGroupStatus.COMPLETED);
+      expect(Number(result.currentBalance)).toBe(1000);
     });
   });
 
   describe('leaveGroup', () => {
-    it('should refund user and remove member', async () => {
+    it('should refund user and remove member from pool', async () => {
       const userId = 'user-1';
       const groupId = 'group-1';
       groupRepository.findOneBy.mockResolvedValue({
         id: groupId,
-        currentAmount: 500,
+        currentBalance: 500,
+        totalDeposits: 500,
       });
       memberRepository.findOneBy.mockResolvedValue({
         id: 'member-1',
-        contributionAmount: 100,
+        totalContributed: 100,
       });
 
       const result = await service.leaveGroup(userId, groupId);

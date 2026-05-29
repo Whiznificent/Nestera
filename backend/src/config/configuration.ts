@@ -62,6 +62,13 @@ export default () => ({
     encryptionKey: process.env.BACKUP_ENCRYPTION_KEY, // 64 hex chars = 32 bytes
     retentionDays: parseInt(process.env.BACKUP_RETENTION_DAYS ?? '30', 10),
     tmpDir: process.env.BACKUP_TMP_DIR ?? '/tmp',
+    testDb: {
+      host: process.env.BACKUP_TEST_DB_HOST,
+      port: parseInt(process.env.BACKUP_TEST_DB_PORT || '5432', 10),
+      user: process.env.BACKUP_TEST_DB_USER,
+      password: process.env.BACKUP_TEST_DB_PASSWORD,
+      name: process.env.BACKUP_TEST_DB_NAME || 'nestera_restore_test',
+    },
   },
   hospital: {
     endpoints: {
@@ -91,6 +98,24 @@ export default () => ({
       process.env.HOSPITAL_CIRCUIT_BREAKER_TIMEOUT || '60000',
       10,
     ),
+  },
+  audit: {
+    retentionDays: parseInt(process.env.AUDIT_RETENTION_DAYS ?? '90', 10),
+    archivePath: process.env.AUDIT_ARCHIVE_PATH || '/var/archive/audit-logs',
+    archivalBatchSize: parseInt(
+      process.env.AUDIT_ARCHIVAL_BATCH_SIZE ?? '10000',
+      10,
+    ),
+    compression: {
+      enabled: process.env.AUDIT_COMPRESSION_ENABLED !== 'false',
+    },
+    coldStorage: {
+      enabled: process.env.AUDIT_COLD_STORAGE_ENABLED === 'true',
+      s3Bucket: process.env.AUDIT_S3_BUCKET,
+      region: process.env.AUDIT_S3_REGION ?? 'us-east-1',
+      awsAccessKeyId: process.env.AUDIT_AWS_ACCESS_KEY_ID,
+      awsSecretAccessKey: process.env.AUDIT_AWS_SECRET_ACCESS_KEY,
+    },
   },
   balanceSync: {
     cacheTtlSeconds: parseInt(

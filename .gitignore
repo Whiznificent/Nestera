@@ -1,21 +1,94 @@
+# Dependencies
+node_modules/
+**/node_modules/
+.pnp
+.pnp.js
+
+# Build outputs
+dist/
+build/
+**/dist/
+**/build/
+.next/
+out/
+
 # Rust's output directory
-target
+target/
+**/target/
 
-/node_modules
+# Testing
+coverage/
+.nyc_output/
+*.log
+test_snapshots/
+**/test_snapshots/
 
-# Local settings
-.soroban
-.stellar
+# Environment files
+.env
+.env.local
+.env.*.local
+*.env
 
-# Test outputs
-contracts/test_snapshots/
-PR_DESCRIPTION.md
-PR_DESCRIPTION_ISSUE75.md
-PR_DESCRIPTION_ISSUE74.md
+# IDEs and editors
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Soroban/Stellar
+.soroban/
+.stellar/
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Prisma
+generated/prisma/
 /generated/prisma
 
+# Temporary files
+*.tmp
+*.temp
+.cache/
+.temp/
+
+# OS files
+Thumbs.db
+.DS_Store
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Agent files
 .agent/
 .agents/
 issue.md
 
-/contracts/test_snapshots
+# Documentation drafts
+PR_DESCRIPTION.md
+PR_DESCRIPTION_ISSUE75.md
+PR_DESCRIPTION_ISSUE74.md
+
+# Package manager locks (keep pnpm-lock.yaml)
+# Uncomment if you want to ignore lock files
+# package-lock.json
+# yarn.lock
+
+# WASM build artifacts
+*.wasm
+!contracts/target/wasm32-unknown-unknown/release/*.wasm
+
+# Backup files
+*.bak
+*.backup
+*~

@@ -48,4 +48,19 @@ export const envValidationSchema = Joi.object({
   MAIL_USER: Joi.string().optional(),
   MAIL_PASS: Joi.string().optional(),
   MAIL_FROM: Joi.string().optional(),
-}).or('DATABASE_URL', 'DB_HOST'); // enforce at least one DB connection strategy
+  // ── Backup storage and restore testing ──────────────────────────────────────
+  BACKUP_S3_BUCKET: Joi.string().optional(),
+  BACKUP_S3_REGION: Joi.string().optional(),
+  BACKUP_AWS_ACCESS_KEY_ID: Joi.string().optional(),
+  BACKUP_AWS_SECRET_ACCESS_KEY: Joi.string().optional(),
+  BACKUP_ENCRYPTION_KEY: Joi.string()
+    .length(64)
+    .hex()
+    .optional(),
+  BACKUP_RETENTION_DAYS: Joi.number().integer().min(1).default(30).optional(),
+  BACKUP_TMP_DIR: Joi.string().optional(),
+  BACKUP_TEST_DB_HOST: Joi.string().hostname().optional(),
+  BACKUP_TEST_DB_PORT: Joi.number().port().default(5432).optional(),
+  BACKUP_TEST_DB_USER: Joi.string().optional(),
+  BACKUP_TEST_DB_PASSWORD: Joi.string().optional(),
+  BACKUP_TEST_DB_NAME: Joi.string().default('nestera_restore_test').optional(),}).or('DATABASE_URL', 'DB_HOST'); // enforce at least one DB connection strategy

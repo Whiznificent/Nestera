@@ -7,7 +7,7 @@ import {
 } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { IsNull, Not, Repository } from 'typeorm';
 import { StellarService } from '../blockchain/stellar.service';
 import { SavingsService } from '../blockchain/savings.service';
 import { TransactionsService } from '../transactions/transactions.service';
@@ -27,12 +27,15 @@ import {
 } from './entities/governance-proposal.entity';
 import { Vote, VoteDirection } from './entities/vote.entity';
 import { Delegation } from './entities/delegation.entity';
-import { VotingPowerResponseDto } from './dto/voting-power-response.dto';
-import { TxStatus, TxType } from '../transactions/entities/transaction.entity';
+import { User } from '../user/entities/user.entity';
 import { LedgerTransaction } from '../blockchain/entities/transaction.entity';
+import { VotingPowerResponseDto } from './dto/voting-power-response.dto';
 
 /** Timelock duration in milliseconds (24 hours) */
 const TIMELOCK_DURATION_MS = 24 * 60 * 60 * 1000;
+
+/** Maximum delegation chain depth to prevent infinite loops */
+const MAX_DELEGATION_CHAIN_DEPTH = 5;
 
 @Injectable()
 export class GovernanceService {
@@ -50,6 +53,8 @@ export class GovernanceService {
     private readonly transactionRepo: Repository<LedgerTransaction>,
     @InjectRepository(Delegation)
     private readonly delegationRepo: Repository<Delegation>,
+    @InjectRepository(User)
+    private readonly userRepo: Repository<User>,
   ) {}
 
   async createProposal(
@@ -89,7 +94,7 @@ export class GovernanceService {
       dto.title,
       onChainId,
     );
-    const requiredQuorum = this.calculateRequiredQuorum();
+    const requiredQuorum = await this.calculateRequiredQuorum();
 
     const proposal = this.proposalRepo.create({
       onChainId,
@@ -189,7 +194,7 @@ export class GovernanceService {
     proposal.attachments = dto.attachments ?? proposal.attachments ?? [];
     proposal.startBlock = nextStartBlock;
     proposal.endBlock = nextEndBlock;
-    proposal.requiredQuorum = this.calculateRequiredQuorum().toFixed(8);
+    proposal.requiredQuorum = (await this.calculateRequiredQuorum()).toFixed(8);
     proposal.quorumBps = this.getQuorumBps();
     proposal.proposalThreshold = this.getProposalThreshold().toFixed(8);
 
@@ -287,6 +292,33 @@ export class GovernanceService {
 
   async getUserVotingPower(userId: string): Promise<VotingPowerResponseDto> {
     const votingPower = await this.getVotingPowerAmount(userId);
+    const user = await this.userService.findById(userId);
+
+    // Get additional info about delegated power
+    let delegatedToOthers = 0;
+    let delegatedFromOthers = 0;
+
+    if (user.publicKey) {
+      // Check if user has delegated their power to someone else
+      const myDelegation = await this.delegationRepo.findOne({
+        where: { delegatorAddress: user.publicKey },
+      });
+      if (myDelegation) {
+        delegatedToOthers = votingPower; // All their power is delegated away
+      }
+
+      // Get power delegated from others to this user
+      const delegators = await this.delegationRepo.find({
+        where: { delegateAddress: user.publicKey },
+      });
+      for (const delegation of delegators) {
+        const delegatorPower = await this.getAddressVotingPower(
+          delegation.delegatorAddress,
+        );
+        delegatedFromOthers += delegatorPower;
+      }
+    }
+
     if (votingPower === 0) {
       return { votingPower: '0 NST' };
     }
@@ -294,7 +326,14 @@ export class GovernanceService {
       minimumFractionDigits: 0,
       maximumFractionDigits: 0,
     });
-    return { votingPower: `${formattedVotingPower} NST` };
+    return {
+      votingPower: `${formattedVotingPower} NST`,
+      breakdown: {
+        ownPower: votingPower - delegatedToOthers,
+        delegatedToOthers,
+        delegatedFromOthers,
+      },
+    };
   }
 
   async castVote(
@@ -379,29 +418,48 @@ export class GovernanceService {
 
   // ── Lifecycle (#541) ───────────────────────────────────────────────────────
 
-  async getProposalStatus(proposalId: string): Promise<{ status: ProposalStatus; timelockEndsAt: Date | null; executedAt: Date | null }> {
+  async getProposalStatus(proposalId: string): Promise<{
+    status: ProposalStatus;
+    timelockEndsAt: Date | null;
+    executedAt: Date | null;
+  }> {
     const proposal = await this.proposalRepo.findOneBy({ id: proposalId });
-    if (!proposal) throw new NotFoundException(`Proposal ${proposalId} not found`);
-    return { status: proposal.status, timelockEndsAt: proposal.timelockEndsAt ?? null, executedAt: proposal.executedAt ?? null };
+    if (!proposal)
+      throw new NotFoundException(`Proposal ${proposalId} not found`);
+    return {
+      status: proposal.status,
+      timelockEndsAt: proposal.timelockEndsAt ?? null,
+      executedAt: proposal.executedAt ?? null,
+    };
   }
 
-  async queueProposal(proposalId: string, userId: string): Promise<ProposalResponseDto> {
+  async queueProposal(
+    proposalId: string,
+    userId: string,
+  ): Promise<ProposalResponseDto> {
     const proposal = await this.proposalRepo.findOneBy({ id: proposalId });
-    if (!proposal) throw new NotFoundException(`Proposal ${proposalId} not found`);
+    if (!proposal)
+      throw new NotFoundException(`Proposal ${proposalId} not found`);
     if (proposal.status !== ProposalStatus.PASSED) {
       throw new BadRequestException('Only passed proposals can be queued');
     }
     proposal.status = ProposalStatus.QUEUED;
     proposal.timelockEndsAt = new Date(Date.now() + TIMELOCK_DURATION_MS);
     const saved = await this.proposalRepo.save(proposal);
-    this.eventEmitter.emit('governance.proposal.queued', { proposalId: saved.id });
+    this.eventEmitter.emit('governance.proposal.queued', {
+      proposalId: saved.id,
+    });
     const currentLedger = await this.getCurrentLedger();
     return this.toProposalResponse(saved, currentLedger);
   }
 
-  async executeProposal(proposalId: string, userId: string): Promise<ProposalResponseDto> {
+  async executeProposal(
+    proposalId: string,
+    userId: string,
+  ): Promise<ProposalResponseDto> {
     const proposal = await this.proposalRepo.findOneBy({ id: proposalId });
-    if (!proposal) throw new NotFoundException(`Proposal ${proposalId} not found`);
+    if (!proposal)
+      throw new NotFoundException(`Proposal ${proposalId} not found`);
     if (proposal.status !== ProposalStatus.QUEUED) {
       throw new BadRequestException('Only queued proposals can be executed');
     }
@@ -411,71 +469,280 @@ export class GovernanceService {
     proposal.status = ProposalStatus.EXECUTED;
     proposal.executedAt = new Date();
     const saved = await this.proposalRepo.save(proposal);
-    this.eventEmitter.emit('governance.proposal.executed', { proposalId: saved.id });
+    this.eventEmitter.emit('governance.proposal.executed', {
+      proposalId: saved.id,
+    });
     const currentLedger = await this.getCurrentLedger();
     return this.toProposalResponse(saved, currentLedger);
   }
 
-  async cancelProposal(proposalId: string, userId: string): Promise<ProposalResponseDto> {
+  async cancelProposal(
+    proposalId: string,
+    userId: string,
+  ): Promise<ProposalResponseDto> {
     const proposal = await this.proposalRepo.findOneBy({ id: proposalId });
-    if (!proposal) throw new NotFoundException(`Proposal ${proposalId} not found`);
+    if (!proposal)
+      throw new NotFoundException(`Proposal ${proposalId} not found`);
     if (proposal.createdByUserId !== userId) {
       throw new ForbiddenException('Only the proposal creator can cancel it');
     }
-    if (proposal.status === ProposalStatus.EXECUTED || proposal.status === ProposalStatus.CANCELLED) {
-      throw new BadRequestException(`Cannot cancel a proposal with status ${proposal.status}`);
+    if (
+      proposal.status === ProposalStatus.EXECUTED ||
+      proposal.status === ProposalStatus.CANCELLED
+    ) {
+      throw new BadRequestException(
+        `Cannot cancel a proposal with status ${proposal.status}`,
+      );
     }
     proposal.status = ProposalStatus.CANCELLED;
     const saved = await this.proposalRepo.save(proposal);
-    this.eventEmitter.emit('governance.proposal.cancelled', { proposalId: saved.id });
+    this.eventEmitter.emit('governance.proposal.cancelled', {
+      proposalId: saved.id,
+    });
+    const currentLedger = await this.getCurrentLedger();
+    return this.toProposalResponse(saved, currentLedger);
+  }
+
+  /**
+   * Admin emergency cancellation of a proposal.
+   * Requires admin role and a valid reason.
+   */
+  async adminCancelProposal(
+    proposalId: string,
+    adminId: string,
+    reason: string,
+  ): Promise<ProposalResponseDto> {
+    const proposal = await this.proposalRepo.findOneBy({ id: proposalId });
+    if (!proposal)
+      throw new NotFoundException(`Proposal ${proposalId} not found`);
+
+    if (
+      proposal.status === ProposalStatus.EXECUTED ||
+      proposal.status === ProposalStatus.CANCELLED
+    ) {
+      throw new BadRequestException(
+        `Cannot cancel a proposal with status ${proposal.status}`,
+      );
+    }
+
+    const previousStatus = proposal.status;
+
+    // Get admin user for audit logging
+    const admin = await this.userService.findById(adminId);
+
+    // Get proposal creator for notification (if available)
+    const creator = proposal.createdByUserId
+      ? await this.userService.findById(proposal.createdByUserId)
+      : null;
+
+    proposal.status = ProposalStatus.CANCELLED;
+    const saved = await this.proposalRepo.save(proposal);
+
+    // Emit emergency cancellation event
+    this.eventEmitter.emit('governance.proposal.emergency_cancelled', {
+      proposalId: saved.id,
+      onChainId: saved.onChainId,
+      adminId,
+      adminPublicKey: admin?.publicKey ?? null,
+      reason,
+      cancelledAt: new Date().toISOString(),
+    });
+
+    // Notify proposal creator
+    if (creator?.publicKey) {
+      this.eventEmitter.emit('governance.proposal.cancelled_by_admin', {
+        proposalId: saved.id,
+        onChainId: saved.onChainId,
+        creatorPublicKey: creator.publicKey,
+        adminPublicKey: admin?.publicKey ?? null,
+        reason,
+        cancelledAt: new Date().toISOString(),
+      });
+    }
+
+    // Log in audit trail
+    this.eventEmitter.emit('audit.log', {
+      action: 'PROPOSAL_EMERGENCY_CANCELLED',
+      entityType: 'GovernanceProposal',
+      entityId: saved.id,
+      userId: adminId,
+      details: {
+        onChainId: saved.onChainId,
+        title: saved.title,
+        reason,
+        previousStatus,
+        newStatus: ProposalStatus.CANCELLED,
+      },
+      timestamp: new Date().toISOString(),
+    });
+
     const currentLedger = await this.getCurrentLedger();
     return this.toProposalResponse(saved, currentLedger);
   }
 
   // ── Delegation (#542) ──────────────────────────────────────────────────────
 
-  async delegate(userId: string, delegateAddress: string): Promise<{ transactionHash: string }> {
+  async delegate(
+    userId: string,
+    delegateAddress: string,
+  ): Promise<{ transactionHash: string }> {
     const user = await this.userService.findById(userId);
-    if (!user.publicKey) throw new BadRequestException('User must have a public key to delegate');
+    if (!user.publicKey)
+      throw new BadRequestException('User must have a public key to delegate');
     if (user.publicKey === delegateAddress) {
       throw new BadRequestException('Cannot delegate to yourself');
     }
-    // Loop prevention: check if delegateAddress already delegates to user
-    const reverseLoop = await this.delegationRepo.findOne({
-      where: { delegatorAddress: delegateAddress, delegateAddress: user.publicKey },
-    });
-    if (reverseLoop) throw new BadRequestException('Delegation loop detected');
+
+    // Validate the target chain so we reject both new loops and existing
+    // circular dependencies further down the line.
+    const targetChain = await this.buildDelegationChain(delegateAddress);
+    if (targetChain.hasLoop || targetChain.chain.includes(user.publicKey)) {
+      throw new BadRequestException('Delegation loop detected in chain');
+    }
+
+    const incomingDepth = await this.getIncomingDelegationDepth(user.publicKey);
+    const resultingDepth = incomingDepth + 1 + targetChain.chain.length;
+    if (resultingDepth > MAX_DELEGATION_CHAIN_DEPTH) {
+      throw new BadRequestException(
+        `Delegation chain would exceed maximum depth of ${MAX_DELEGATION_CHAIN_DEPTH}`,
+      );
+    }
 
     await this.delegationRepo.upsert(
       { delegatorAddress: user.publicKey, delegateAddress },
       ['delegatorAddress'],
     );
     const txHash = `0x${Math.random().toString(16).slice(2, 10)}${Date.now().toString(16)}`;
-    this.eventEmitter.emit('governance.delegation.changed', { delegator: user.publicKey, delegate: delegateAddress });
+    this.eventEmitter.emit('governance.delegation.changed', {
+      delegator: user.publicKey,
+      delegate: delegateAddress,
+    });
     return { transactionHash: txHash };
+  }
+
+  /**
+   * Builds the full delegation chain from a starting address to detect loops.
+   * Returns an array of addresses in the chain order.
+   */
+  private async buildDelegationChain(
+    startAddress: string,
+  ): Promise<{ chain: string[]; hasLoop: boolean }> {
+    const chain: string[] = [];
+    let currentAddress: string | null = startAddress;
+    const visited = new Set<string>([startAddress]);
+
+    while (currentAddress) {
+      const delegation = await this.delegationRepo.findOne({
+        where: { delegatorAddress: currentAddress },
+      });
+
+      if (delegation) {
+        const nextAddress = delegation.delegateAddress;
+        chain.push(nextAddress);
+
+        if (visited.has(nextAddress)) {
+          return { chain, hasLoop: true };
+        }
+
+        visited.add(nextAddress);
+        currentAddress = nextAddress;
+      } else {
+        currentAddress = null;
+      }
+    }
+
+    return { chain, hasLoop: false };
+  }
+
+  private async getIncomingDelegationDepth(
+    userAddress: string,
+    visited = new Set<string>(),
+  ): Promise<number> {
+    if (visited.has(userAddress)) {
+      return 0;
+    }
+
+    visited.add(userAddress);
+    const directDelegators =
+      (await this.delegationRepo.find({
+        where: { delegateAddress: userAddress },
+      })) ?? [];
+
+    if (!directDelegators.length) {
+      return 0;
+    }
+
+    const depths = await Promise.all(
+      directDelegators.map(async (delegation) => {
+        const parentDepth = await this.getIncomingDelegationDepth(
+          delegation.delegatorAddress,
+          new Set(visited),
+        );
+        return parentDepth + 1;
+      }),
+    );
+
+    return Math.max(...depths);
+  }
+
+  /**
+   * Gets the full delegation chain visualization for a user.
+   * Returns the chain as an array of addresses with depth information.
+   */
+  async getDelegationChain(
+    userId: string,
+  ): Promise<{ chain: string[]; depth: number; hasLoop: boolean }> {
+    const user = await this.userService.findById(userId);
+    if (!user.publicKey) {
+      return { chain: [], depth: 0, hasLoop: false };
+    }
+
+    const { chain, hasLoop } = await this.buildDelegationChain(user.publicKey);
+
+    return {
+      chain,
+      depth: chain.length,
+      hasLoop,
+    };
   }
 
   async revokeDelegate(userId: string): Promise<void> {
     const user = await this.userService.findById(userId);
-    if (!user.publicKey) throw new BadRequestException('User must have a public key');
+    if (!user.publicKey)
+      throw new BadRequestException('User must have a public key');
     await this.delegationRepo.delete({ delegatorAddress: user.publicKey });
-    this.eventEmitter.emit('governance.delegation.revoked', { delegator: user.publicKey });
+    this.eventEmitter.emit('governance.delegation.revoked', {
+      delegator: user.publicKey,
+    });
   }
 
-  async getMyDelegation(userId: string): Promise<{ delegate: string | null; totalDelegatedPower: number }> {
+  async getMyDelegation(
+    userId: string,
+  ): Promise<{ delegate: string | null; totalDelegatedPower: number }> {
     const user = await this.userService.findById(userId);
     if (!user.publicKey) return { delegate: null, totalDelegatedPower: 0 };
-    const record = await this.delegationRepo.findOne({ where: { delegatorAddress: user.publicKey } });
-    const delegators = await this.delegationRepo.find({ where: { delegateAddress: user.publicKey } });
+    const record = await this.delegationRepo.findOne({
+      where: { delegatorAddress: user.publicKey },
+    });
+    const delegators = await this.delegationRepo.find({
+      where: { delegateAddress: user.publicKey },
+    });
     const totalDelegatedPower = delegators.length; // simplified; real impl sums NST balances
     return { delegate: record?.delegateAddress ?? null, totalDelegatedPower };
   }
 
-  async getMyDelegators(userId: string): Promise<{ delegators: string[]; totalDelegatedPower: number }> {
+  async getMyDelegators(
+    userId: string,
+  ): Promise<{ delegators: string[]; totalDelegatedPower: number }> {
     const user = await this.userService.findById(userId);
     if (!user.publicKey) return { delegators: [], totalDelegatedPower: 0 };
-    const records = await this.delegationRepo.find({ where: { delegateAddress: user.publicKey } });
-    return { delegators: records.map((r) => r.delegatorAddress), totalDelegatedPower: records.length };
+    const records = await this.delegationRepo.find({
+      where: { delegateAddress: user.publicKey },
+    });
+    return {
+      delegators: records.map((r) => r.delegatorAddress),
+      totalDelegatedPower: records.length,
+    };
   }
 
   async getProposalVotesByOnChainId(
@@ -549,6 +816,48 @@ export class GovernanceService {
     const balance = await this.savingsService.getUserVaultBalance(
       governanceTokenContractId,
       user.publicKey,
+    );
+
+    const ownPower = Number(balance) / 10_000_000;
+
+    // Add delegated voting power from users who delegated to this user
+    const delegatedPower = await this.getDelegatedVotingPower(user.publicKey);
+
+    return ownPower + delegatedPower;
+  }
+
+  /**
+   * Calculates the total voting power delegated to a user.
+   * This includes the voting power of all users who have delegated to this user.
+   */
+  private async getDelegatedVotingPower(userAddress: string): Promise<number> {
+    const delegators = await this.delegationRepo.find({
+      where: { delegateAddress: userAddress },
+    });
+
+    let totalDelegatedPower = 0;
+    for (const delegation of delegators) {
+      const delegatorPower = await this.getAddressVotingPower(
+        delegation.delegatorAddress,
+      );
+      totalDelegatedPower += delegatorPower;
+    }
+
+    return totalDelegatedPower;
+  }
+
+  /**
+   * Gets the voting power for a specific wallet address.
+   */
+  private async getAddressVotingPower(address: string): Promise<number> {
+    const governanceTokenContractId = process.env.NST_GOVERNANCE_CONTRACT_ID;
+    if (!governanceTokenContractId) {
+      throw new Error('NST governance token contract ID not configured');
+    }
+
+    const balance = await this.savingsService.getUserVaultBalance(
+      governanceTokenContractId,
+      address,
     );
 
     return Number(balance) / 10_000_000;
@@ -677,8 +986,33 @@ export class GovernanceService {
     }
   }
 
-  private calculateRequiredQuorum(): number {
-    return (this.getMaxVotingPower() * this.getQuorumBps()) / 10_000;
+  private async calculateRequiredQuorum(): Promise<number> {
+    // Calculate total voting power including delegated votes
+    const totalVotingPower = await this.getTotalVotingPower();
+    return (totalVotingPower * this.getQuorumBps()) / 10_000;
+  }
+
+  /**
+   * Calculates the total voting power in the system including all delegated votes.
+   */
+  private async getTotalVotingPower(): Promise<number> {
+    // Get all users with public keys
+    const users = await this.userRepo.find({
+      where: { publicKey: Not(IsNull()) },
+      select: ['id'],
+    });
+
+    if (!users || users.length === 0) {
+      return 0;
+    }
+
+    let totalVotingPower = 0;
+    for (const user of users) {
+      const userVotingPower = await this.getVotingPowerAmount(user.id);
+      totalVotingPower += userVotingPower;
+    }
+
+    return totalVotingPower;
   }
 
   private resolveProposalTitle(

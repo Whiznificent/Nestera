@@ -9,16 +9,20 @@ import { AuthService } from './auth.service';
 import { TwoFactorService } from './two-factor.service';
 import { AuthController } from './auth.controller';
 import { User } from '../modules/user/entities/user.entity';
+import { RefreshToken } from './entities/refresh-token.entity';
+import { Session } from './entities/session.entity';
 import { CacheModule } from '../modules/cache/cache.module';
 import { CacheStrategyService } from '../modules/cache/cache-strategy.service';
 import { AuthRateLimitService } from './services/auth-rate-limit.service';
 import { AuthRateLimitGuard } from './guards/auth-rate-limit.guard';
 import { AuthSecurityAdminController } from './controllers/auth-security-admin.controller';
+import { AuditLog } from '../common/entities/audit-log.entity';
+import { AuditLogService } from '../common/services/audit-log.service';
 
 @Module({
   imports: [
     UserModule,
-    TypeOrmModule.forFeature([User]),
+    TypeOrmModule.forFeature([User, RefreshToken, Session, AuditLog]),
     CacheModule,
     PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.registerAsync({
@@ -43,6 +47,7 @@ import { AuthSecurityAdminController } from './controllers/auth-security-admin.c
     CacheStrategyService,
     AuthRateLimitService,
     AuthRateLimitGuard,
+    AuditLogService,
   ],
   exports: [
     AuthService,
@@ -50,6 +55,7 @@ import { AuthSecurityAdminController } from './controllers/auth-security-admin.c
     JwtModule,
     PassportModule,
     AuthRateLimitService,
+    AuditLogService,
   ],
 })
 export class AuthModule {}

@@ -21,8 +21,8 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { CreateSavingsGroupDto } from './dto/create-savings-group.dto';
 import { ContributeSavingsGroupDto } from './dto/contribute-savings-group.dto';
 import { InviteMemberDto } from './dto/invite-member.dto';
-import { SavingsGroup } from './entities/savings-group.entity';
-import { SavingsGroupMember } from './entities/savings-group-member.entity';
+import { GroupSavingsPool } from './entities/group-savings-pool.entity';
+import { GroupPoolMember } from './entities/group-pool-member.entity';
 import { SavingsGroupActivity } from './entities/savings-group-activity.entity';
 
 @ApiTags('savings/groups')
@@ -38,12 +38,12 @@ export class GroupSavingsController {
   @ApiResponse({
     status: 201,
     description: 'Group created successfully',
-    type: SavingsGroup,
+    type: GroupSavingsPool,
   })
   async createGroup(
     @CurrentUser() user: { id: string },
     @Body() dto: CreateSavingsGroupDto,
-  ): Promise<{ success: boolean; data: SavingsGroup }> {
+  ): Promise<{ success: boolean; data: GroupSavingsPool }> {
     const data = await this.groupSavingsService.createGroup(user.id, dto);
     return { success: true, data };
   }
@@ -55,12 +55,12 @@ export class GroupSavingsController {
   @ApiResponse({
     status: 200,
     description: 'Joined group successfully',
-    type: SavingsGroupMember,
+    type: GroupPoolMember,
   })
   async joinGroup(
     @CurrentUser() user: { id: string },
     @Param('id') id: string,
-  ): Promise<{ success: boolean; data: SavingsGroupMember }> {
+  ): Promise<{ success: boolean; data: GroupPoolMember }> {
     const data = await this.groupSavingsService.joinGroup(user.id, id);
     return { success: true, data };
   }
@@ -72,13 +72,13 @@ export class GroupSavingsController {
   @ApiResponse({
     status: 200,
     description: 'User invited successfully',
-    type: SavingsGroupMember,
+    type: GroupPoolMember,
   })
   async inviteMember(
     @CurrentUser() user: { id: string },
     @Param('id') id: string,
     @Body() dto: InviteMemberDto,
-  ): Promise<{ success: boolean; data: SavingsGroupMember }> {
+  ): Promise<{ success: boolean; data: GroupPoolMember }> {
     const data = await this.groupSavingsService.inviteMember(user.id, id, dto);
     return { success: true, data };
   }
@@ -89,11 +89,11 @@ export class GroupSavingsController {
   @ApiResponse({
     status: 200,
     description: 'List of members',
-    type: [SavingsGroupMember],
+    type: [GroupPoolMember],
   })
   async listMembers(
     @Param('id') id: string,
-  ): Promise<{ success: boolean; data: SavingsGroupMember[] }> {
+  ): Promise<{ success: boolean; data: GroupPoolMember[] }> {
     const data = await this.groupSavingsService.listMembers(id);
     return { success: true, data };
   }
@@ -105,13 +105,13 @@ export class GroupSavingsController {
   @ApiResponse({
     status: 200,
     description: 'Contribution successful',
-    type: SavingsGroup,
+    type: GroupSavingsPool,
   })
   async contribute(
     @CurrentUser() user: { id: string },
     @Param('id') id: string,
     @Body() dto: ContributeSavingsGroupDto,
-  ): Promise<{ success: boolean; data: SavingsGroup }> {
+  ): Promise<{ success: boolean; data: GroupSavingsPool }> {
     const data = await this.groupSavingsService.contribute(user.id, id, dto);
     return { success: true, data };
   }

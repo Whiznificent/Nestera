@@ -8,13 +8,14 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource } from 'typeorm';
 import {
-  SavingsGroup,
-  SavingsGroupStatus,
-} from './entities/savings-group.entity';
+  GroupSavingsPool,
+  PoolStatus,
+} from './entities/group-savings-pool.entity';
 import {
-  SavingsGroupMember,
-  SavingsGroupRole,
-} from './entities/savings-group-member.entity';
+  GroupPoolMember,
+  MemberRole,
+  MemberStatus,
+} from './entities/group-pool-member.entity';
 import {
   SavingsGroupActivity,
   SavingsGroupActivityType,
@@ -26,10 +27,10 @@ import { InviteMemberDto } from './dto/invite-member.dto';
 @Injectable()
 export class GroupSavingsService {
   constructor(
-    @InjectRepository(SavingsGroup)
-    private readonly groupRepository: Repository<SavingsGroup>,
-    @InjectRepository(SavingsGroupMember)
-    private readonly memberRepository: Repository<SavingsGroupMember>,
+    @InjectRepository(GroupSavingsPool)
+    private readonly groupRepository: Repository<GroupSavingsPool>,
+    @InjectRepository(GroupPoolMember)
+    private readonly memberRepository: Repository<GroupPoolMember>,
     @InjectRepository(SavingsGroupActivity)
     private readonly activityRepository: Repository<SavingsGroupActivity>,
     private readonly dataSource: DataSource,
@@ -38,21 +39,26 @@ export class GroupSavingsService {
   async createGroup(
     creatorId: string,
     dto: CreateSavingsGroupDto,
-  ): Promise<SavingsGroup> {
+  ): Promise<GroupSavingsPool> {
     return await this.dataSource.transaction(async (manager) => {
-      const group = manager.create(SavingsGroup, {
+      const group = manager.create(GroupSavingsPool, {
         ...dto,
         creatorId,
-        currentAmount: 0,
-        status: SavingsGroupStatus.OPEN,
+        currentBalance: 0,
+        totalDeposits: 0,
+        status: PoolStatus.ACTIVE,
       });
       const savedGroup = await manager.save(group);
 
-      const member = manager.create(SavingsGroupMember, {
-        groupId: savedGroup.id,
+      const member = manager.create(GroupPoolMember, {
+        poolId: savedGroup.id,
         userId: creatorId,
-        role: SavingsGroupRole.ADMIN,
-        contributionAmount: 0,
+        role: MemberRole.OWNER,
+        walletAddress: dto.multisigAddress, // For creator, we use pool multisig as primary or their wallet
+        status: MemberStatus.ACTIVE,
+        totalContributed: 0,
+        sharePercentage: 100,
+        joinedAt: new Date(),
       });
       await manager.save(member);
 
@@ -68,30 +74,31 @@ export class GroupSavingsService {
     });
   }
 
-  async joinGroup(
-    userId: string,
-    groupId: string,
-  ): Promise<SavingsGroupMember> {
+  async joinGroup(userId: string, groupId: string): Promise<GroupPoolMember> {
     const group = await this.groupRepository.findOneBy({ id: groupId });
-    if (!group) throw new NotFoundException('Savings group not found');
-    if (group.status !== SavingsGroupStatus.OPEN) {
-      throw new BadRequestException('Group is not open for joining');
+    if (!group) throw new NotFoundException('Savings group pool not found');
+    if (group.status !== PoolStatus.ACTIVE) {
+      throw new BadRequestException('Group pool is not active for joining');
     }
 
     const existingMember = await this.memberRepository.findOneBy({
-      groupId,
+      poolId: groupId,
       userId,
     });
     if (existingMember) {
-      throw new ConflictException('User is already a member of this group');
+      throw new ConflictException('User is already a member of this pool');
     }
 
     return await this.dataSource.transaction(async (manager) => {
-      const member = manager.create(SavingsGroupMember, {
-        groupId,
+      const member = manager.create(GroupPoolMember, {
+        poolId: groupId,
         userId,
-        role: SavingsGroupRole.MEMBER,
-        contributionAmount: 0,
+        role: MemberRole.MEMBER,
+        status: MemberStatus.ACTIVE,
+        totalContributed: 0,
+        sharePercentage: 0,
+        walletAddress: '', // Should be provided by user in real scenario
+        joinedAt: new Date(),
       });
       const savedMember = await manager.save(member);
 
@@ -110,33 +117,43 @@ export class GroupSavingsService {
     adminId: string,
     groupId: string,
     dto: InviteMemberDto,
-  ): Promise<SavingsGroupMember> {
+  ): Promise<GroupPoolMember> {
     const group = await this.groupRepository.findOneBy({ id: groupId });
-    if (!group) throw new NotFoundException('Savings group not found');
+    if (!group) throw new NotFoundException('Savings group pool not found');
 
     const adminMember = await this.memberRepository.findOneBy({
-      groupId,
+      poolId: groupId,
       userId: adminId,
     });
-    if (!adminMember || adminMember.role !== SavingsGroupRole.ADMIN) {
-      throw new ForbiddenException('Only group admins can invite members');
+    if (
+      !adminMember ||
+      (adminMember.role !== MemberRole.ADMIN &&
+        adminMember.role !== MemberRole.OWNER)
+    ) {
+      throw new ForbiddenException(
+        'Only group admins or owners can invite members',
+      );
     }
 
     const targetUserId = dto.userId;
     const existingMember = await this.memberRepository.findOneBy({
-      groupId,
+      poolId: groupId,
       userId: targetUserId,
     });
     if (existingMember) {
-      throw new ConflictException('User is already a member of this group');
+      throw new ConflictException('User is already a member of this pool');
     }
 
     return await this.dataSource.transaction(async (manager) => {
-      const member = manager.create(SavingsGroupMember, {
-        groupId,
+      const member = manager.create(GroupPoolMember, {
+        poolId: groupId,
         userId: targetUserId,
-        role: SavingsGroupRole.MEMBER,
-        contributionAmount: 0,
+        role: MemberRole.MEMBER,
+        status: MemberStatus.ACTIVE,
+        totalContributed: 0,
+        sharePercentage: 0,
+        walletAddress: '', // To be updated by user on join
+        joinedAt: new Date(),
       });
       const savedMember = await manager.save(member);
 
@@ -152,12 +169,12 @@ export class GroupSavingsService {
     });
   }
 
-  async listMembers(groupId: string): Promise<SavingsGroupMember[]> {
+  async listMembers(groupId: string): Promise<GroupPoolMember[]> {
     const group = await this.groupRepository.findOneBy({ id: groupId });
-    if (!group) throw new NotFoundException('Savings group not found');
+    if (!group) throw new NotFoundException('Savings group pool not found');
 
     return await this.memberRepository.find({
-      where: { groupId },
+      where: { poolId: groupId },
       relations: ['user'],
       order: { joinedAt: 'ASC' },
     });
@@ -167,31 +184,40 @@ export class GroupSavingsService {
     userId: string,
     groupId: string,
     dto: ContributeSavingsGroupDto,
-  ): Promise<SavingsGroup> {
+  ): Promise<GroupSavingsPool> {
     const group = await this.groupRepository.findOneBy({ id: groupId });
-    if (!group) throw new NotFoundException('Savings group not found');
-    if (group.status !== SavingsGroupStatus.OPEN) {
-      throw new BadRequestException('Group is not accepting contributions');
+    if (!group) throw new NotFoundException('Savings group pool not found');
+    if (group.status !== PoolStatus.ACTIVE) {
+      throw new BadRequestException(
+        'Group pool is not accepting contributions',
+      );
     }
 
-    const member = await this.memberRepository.findOneBy({ groupId, userId });
+    const member = await this.memberRepository.findOneBy({
+      poolId: groupId,
+      userId,
+    });
     if (!member) {
-      throw new ForbiddenException('Only group members can contribute');
+      throw new ForbiddenException('Only pool members can contribute');
     }
 
     return await this.dataSource.transaction(async (manager) => {
       const amount = Number(dto.amount);
 
       // Update member contribution
-      member.contributionAmount = Number(member.contributionAmount) + amount;
+      member.totalContributed = Number(member.totalContributed) + amount;
       await manager.save(member);
 
-      // Update group total
-      group.currentAmount = Number(group.currentAmount) + amount;
+      // Update pool total
+      group.totalDeposits = Number(group.totalDeposits) + amount;
+      group.currentBalance = Number(group.currentBalance) + amount;
 
-      // Check if goal reached
-      if (Number(group.currentAmount) >= Number(group.targetAmount)) {
-        group.status = SavingsGroupStatus.COMPLETED;
+      // Check if target reached
+      if (
+        group.targetAmount &&
+        Number(group.currentBalance) >= Number(group.targetAmount)
+      ) {
+        // Pool logic might differ, but for now we keep it active or mark closed
       }
 
       const savedGroup = await manager.save(group);
@@ -225,22 +251,21 @@ export class GroupSavingsService {
     groupId: string,
   ): Promise<{ success: boolean; refundAmount: number }> {
     const group = await this.groupRepository.findOneBy({ id: groupId });
-    if (!group) throw new NotFoundException('Savings group not found');
+    if (!group) throw new NotFoundException('Savings group pool not found');
 
-    const member = await this.memberRepository.findOneBy({ groupId, userId });
-    if (!member) throw new NotFoundException('Membership not found');
+    const member = await this.memberRepository.findOneBy({
+      poolId: groupId,
+      userId,
+    });
+    if (!member) throw new NotFoundException('Pool membership not found');
 
     return await this.dataSource.transaction(async (manager) => {
-      const refundAmount = Number(member.contributionAmount);
+      const refundAmount = Number(member.totalContributed);
 
-      // Update group amount
-      group.currentAmount = Number(group.currentAmount) - refundAmount;
-      if (
-        group.status === SavingsGroupStatus.COMPLETED &&
-        Number(group.currentAmount) < Number(group.targetAmount)
-      ) {
-        group.status = SavingsGroupStatus.OPEN;
-      }
+      // Update pool amount
+      group.totalDeposits = Number(group.totalDeposits) - refundAmount;
+      group.currentBalance = Number(group.currentBalance) - refundAmount;
+
       await manager.save(group);
 
       // Record refund activity

@@ -1,20 +1,20 @@
-'use client';
+"use client";
 
 import React from 'react';
 import { env } from "../lib/env";
 
 const productLinks = [
-  { label: 'Flexible Savings', href: '#' },
-  { label: 'Locked Savings', href: '#' },
-  { label: 'Goal Fund', href: '#' },
-  { label: 'Group Savings', href: '#' },
+  { label: "Flexible Savings", href: "#" },
+  { label: "Locked Savings", href: "#" },
+  { label: "Goal Fund", href: "#" },
+  { label: "Group Savings", href: "#" },
 ];
 
 const companyLinks = [
-  { label: 'About', href: '#' },
-  { label: 'Blog', href: '#' },
-  { label: 'Careers', href: '#' },
-  { label: 'Press', href: '#' },
+  { label: "About", href: "#" },
+  { label: "Blog", href: "#" },
+  { label: "Careers", href: "#" },
+  { label: "Press", href: "#" },
 ];
 
 const communityLinks = [
@@ -48,9 +48,29 @@ const Footer: React.FC = () => {
                 className="flex items-center justify-center shrink-0 text-[#00d4c0]"
                 aria-hidden="true"
               >
-                <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <rect x="4" y="8" width="24" height="16" rx="3" stroke="currentColor" strokeWidth="2" fill="none" />
-                  <path d="M4 14h24" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                <svg
+                  width="32"
+                  height="32"
+                  viewBox="0 0 32 32"
+                  fill="none"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <rect
+                    x="4"
+                    y="8"
+                    width="24"
+                    height="16"
+                    rx="3"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    fill="none"
+                  />
+                  <path
+                    d="M4 14h24"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                  />
                   <circle cx="10" cy="11" r="1.5" fill="currentColor" />
                 </svg>
               </span>
@@ -61,7 +81,10 @@ const Footer: React.FC = () => {
             </p>
           </div>
 
-          <nav className="flex flex-wrap gap-12 max-md:flex-col max-md:gap-7" aria-label="Footer navigation">
+          <nav
+            className="flex flex-wrap gap-12 max-md:flex-col max-md:gap-7"
+            aria-label="Footer navigation"
+          >
             <div className="min-w-[120px] max-md:min-w-0">
               <h3 className="text-[0.85rem] font-bold text-white normal-case tracking-normal mb-4 leading-tight">
                 Product

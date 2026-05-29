@@ -1,16 +1,19 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { getRepositoryToken } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 import { AuthService } from './auth.service';
 import { UserService } from '../modules/user/user.service';
 import { JwtService } from '@nestjs/jwt';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Cache } from 'cache-manager';
-import {
-  BadRequestException,
-  UnauthorizedException,
-} from '@nestjs/common';
+import { BadRequestException, UnauthorizedException } from '@nestjs/common';
 import * as StellarSdk from '@stellar/stellar-sdk';
 import { AuthRateLimitService } from './services/auth-rate-limit.service';
+import { RefreshToken } from './entities/refresh-token.entity';
+import { Session } from './entities/session.entity';
+import { User } from '../modules/user/entities/user.entity';
+import { ConfigService } from '@nestjs/config';
 
 describe('AuthService - Nonce Security', () => {
   let service: AuthService;
@@ -49,6 +52,37 @@ describe('AuthService - Nonce Security', () => {
     isAccountLocked: jest.fn().mockResolvedValue(false),
   };
 
+  const mockRefreshTokenRepository = {
+    create: jest.fn(),
+    save: jest.fn(),
+    findOne: jest.fn(),
+    update: jest.fn(),
+    find: jest.fn(),
+    delete: jest.fn(),
+  };
+
+  const mockSessionRepository = {
+    create: jest.fn(),
+    save: jest.fn(),
+    findOne: jest.fn(),
+    update: jest.fn(),
+    find: jest.fn(),
+    delete: jest.fn(),
+  };
+
+  const mockUserRepository = {
+    create: jest.fn(),
+    save: jest.fn(),
+    findOne: jest.fn(),
+    update: jest.fn(),
+    find: jest.fn(),
+    delete: jest.fn(),
+  };
+
+  const mockConfigService = {
+    get: jest.fn().mockReturnValue('1h'),
+  };
+
   // Generate a valid Stellar keypair for testing
   const testKeypair = StellarSdk.Keypair.random();
   const testPublicKey = testKeypair.publicKey();
@@ -78,6 +112,22 @@ describe('AuthService - Nonce Security', () => {
         {
           provide: AuthRateLimitService,
           useValue: mockAuthRateLimitService,
+        },
+        {
+          provide: getRepositoryToken(RefreshToken),
+          useValue: mockRefreshTokenRepository,
+        },
+        {
+          provide: getRepositoryToken(Session),
+          useValue: mockSessionRepository,
+        },
+        {
+          provide: getRepositoryToken(User),
+          useValue: mockUserRepository,
+        },
+        {
+          provide: ConfigService,
+          useValue: mockConfigService,
         },
       ],
     }).compile();

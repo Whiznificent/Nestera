@@ -30,8 +30,12 @@ import { NetWorthDto } from './dto/net-worth.dto';
 import { UserProfileResponseDto } from './dto/user-profile-response.dto';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
-
+import { ThrottlerGuard } from '@nestjs/throttler';
 import { FileValidator } from '@nestjs/common';
+
+// File upload configuration
+const MAX_AVATAR_SIZE = 5 * 1024 * 1024; // 5MB
+const MAX_KYC_DOC_SIZE = 10 * 1024 * 1024; // 10MB
 
 class ImageTypeValidator extends FileValidator {
   constructor() {
@@ -177,15 +181,17 @@ export class UserController {
   }
 
   @Post('avatar')
+  @UseGuards(ThrottlerGuard)
   @UseInterceptors(FileInterceptor('file'))
   async uploadAvatar(
     @CurrentUser() user: { id: string },
     @UploadedFile(
       new ParseFilePipe({
         validators: [
-          new MaxFileSizeValidator({ maxSize: 1024 * 1024 * 5 }), // 5MB
+          new MaxFileSizeValidator({ maxSize: MAX_AVATAR_SIZE }),
           new ImageTypeValidator(),
         ],
+        fileIsRequired: true,
       }),
     )
     file: any,
@@ -195,15 +201,17 @@ export class UserController {
   }
 
   @Post('me/kyc-docs')
+  @UseGuards(ThrottlerGuard)
   @UseInterceptors(FileInterceptor('document'))
   async uploadKycDocument(
     @CurrentUser() user: { id: string },
     @UploadedFile(
       new ParseFilePipe({
         validators: [
-          new MaxFileSizeValidator({ maxSize: 1024 * 1024 * 10 }), // 10MB
+          new MaxFileSizeValidator({ maxSize: MAX_KYC_DOC_SIZE }),
           new KycDocumentValidator(),
         ],
+        fileIsRequired: true,
       }),
     )
     file: any,

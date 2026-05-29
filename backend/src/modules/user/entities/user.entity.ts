@@ -74,6 +74,16 @@ export class User {
   @Column({ type: 'timestamp', nullable: true })
   lastLoginAt: Date | null;
 
+  // Account lockout fields
+  @Column({ type: 'int', default: 0 })
+  failedLoginAttempts: number;
+
+  @Column({ type: 'timestamp', nullable: true })
+  lockedUntil: Date | null;
+
+  @Column({ type: 'boolean', default: false })
+  isLocked: boolean;
+
   @CreateDateColumn()
   createdAt: Date;
 

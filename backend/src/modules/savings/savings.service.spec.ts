@@ -30,7 +30,7 @@ describe('SavingsService', () => {
     getUserSavingsBalance: jest.Mock;
     getUserVaultBalance: jest.Mock;
   };
-  let cacheManager: { del: jest.Mock };
+  let cacheManager: { del: jest.Mock; get: jest.Mock; set: jest.Mock };
 
   beforeEach(async () => {
     productRepository = {
@@ -60,6 +60,8 @@ describe('SavingsService', () => {
 
     cacheManager = {
       del: jest.fn(),
+      get: jest.fn().mockResolvedValue(undefined),
+      set: jest.fn().mockResolvedValue(undefined),
     };
 
     const module: TestingModule = await Test.createTestingModule({

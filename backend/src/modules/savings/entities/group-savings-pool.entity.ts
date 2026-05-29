@@ -14,6 +14,7 @@ import { SavingsProduct } from './savings-product.entity';
 import { GroupPoolMember } from './group-pool-member.entity';
 import { MultiSigWithdrawalRequest } from './multi-sig-withdrawal-request.entity';
 import { SignatureEvent } from './signature-event.entity';
+import { SavingsGroupActivity } from './savings-group-activity.entity';
 
 export enum PoolStatus {
   ACTIVE = 'ACTIVE',
@@ -122,4 +123,9 @@ export class GroupSavingsPool {
 
   @OneToMany(() => SignatureEvent, (event) => event.pool, { cascade: true })
   signatureEvents: SignatureEvent[];
+
+  @OneToMany(() => SavingsGroupActivity, (activity) => activity.group, {
+    cascade: true,
+  })
+  activities: SavingsGroupActivity[];
 }

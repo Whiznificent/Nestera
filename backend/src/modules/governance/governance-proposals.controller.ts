@@ -19,14 +19,18 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../../common/guards/roles.guard';
+import { Roles } from '../../common/decorators/roles.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { CreateProposalDto } from './dto/create-proposal.dto';
 import { EditProposalDto } from './dto/edit-proposal.dto';
 import { CastVoteDto } from './dto/cast-vote.dto';
+import { AdminCancelProposalDto } from './dto/admin-cancel-proposal.dto';
 import { ProposalListItemDto } from './dto/proposal-list-item.dto';
 import { ProposalResponseDto } from './dto/proposal-response.dto';
 import { ProposalVotesResponseDto } from './dto/proposal-votes-response.dto';
 import { ProposalStatus } from './entities/governance-proposal.entity';
+import { Role } from '../../common/enums/role.enum';
 import { GovernanceService } from './governance.service';
 
 @ApiTags('governance')
@@ -175,12 +179,30 @@ export class GovernanceProposalsController {
 
   @Get(':id/status')
   @ApiOperation({ summary: 'Get current proposal lifecycle state' })
-  @ApiParam({ name: 'id', type: 'string', format: 'uuid', description: 'Proposal UUID' })
-  @ApiResponse({ status: 200, description: 'Proposal status', schema: { type: 'object', properties: { status: { type: 'string' }, timelockEndsAt: { type: 'string', nullable: true }, executedAt: { type: 'string', nullable: true } } } })
+  @ApiParam({
+    name: 'id',
+    type: 'string',
+    format: 'uuid',
+    description: 'Proposal UUID',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Proposal status',
+    schema: {
+      type: 'object',
+      properties: {
+        status: { type: 'string' },
+        timelockEndsAt: { type: 'string', nullable: true },
+        executedAt: { type: 'string', nullable: true },
+      },
+    },
+  })
   @ApiResponse({ status: 404, description: 'Proposal not found' })
-  getProposalStatus(
-    @Param('id') id: string,
-  ): Promise<{ status: ProposalStatus; timelockEndsAt: Date | null; executedAt: Date | null }> {
+  getProposalStatus(@Param('id') id: string): Promise<{
+    status: ProposalStatus;
+    timelockEndsAt: Date | null;
+    executedAt: Date | null;
+  }> {
     return this.governanceService.getProposalStatus(id);
   }
 
@@ -189,7 +211,11 @@ export class GovernanceProposalsController {
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Queue a passed proposal (starts timelock)' })
   @ApiParam({ name: 'id', type: 'string', format: 'uuid' })
-  @ApiResponse({ status: 201, description: 'Proposal queued', type: ProposalResponseDto })
+  @ApiResponse({
+    status: 201,
+    description: 'Proposal queued',
+    type: ProposalResponseDto,
+  })
   @ApiResponse({ status: 400, description: 'Proposal not in Passed state' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   queueProposal(
@@ -204,8 +230,15 @@ export class GovernanceProposalsController {
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Execute a queued proposal after timelock' })
   @ApiParam({ name: 'id', type: 'string', format: 'uuid' })
-  @ApiResponse({ status: 201, description: 'Proposal executed', type: ProposalResponseDto })
-  @ApiResponse({ status: 400, description: 'Timelock not elapsed or wrong state' })
+  @ApiResponse({
+    status: 201,
+    description: 'Proposal executed',
+    type: ProposalResponseDto,
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Timelock not elapsed or wrong state',
+  })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   executeProposal(
     @Param('id') id: string,
@@ -219,7 +252,11 @@ export class GovernanceProposalsController {
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Cancel a proposal (creator only)' })
   @ApiParam({ name: 'id', type: 'string', format: 'uuid' })
-  @ApiResponse({ status: 201, description: 'Proposal cancelled', type: ProposalResponseDto })
+  @ApiResponse({
+    status: 201,
+    description: 'Proposal cancelled',
+    type: ProposalResponseDto,
+  })
   @ApiResponse({ status: 403, description: 'Not the proposal creator' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   cancelProposal(
@@ -228,5 +265,31 @@ export class GovernanceProposalsController {
   ): Promise<ProposalResponseDto> {
     return this.governanceService.cancelProposal(id, user.id);
   }
-}
 
+  // ── Admin endpoints ───────────────────────────────────────────────────────
+
+  @Post(':id/admin-cancel')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Emergency cancellation by admin',
+    description:
+      'Allows an admin to cancel a malicious or erroneous proposal. Requires a valid reason.',
+  })
+  @ApiParam({ name: 'id', type: 'string', format: 'uuid' })
+  @ApiResponse({
+    status: 201,
+    description: 'Proposal cancelled by admin',
+    type: ProposalResponseDto,
+  })
+  @ApiResponse({ status: 403, description: 'Not an admin' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  adminCancelProposal(
+    @Param('id') id: string,
+    @Body() dto: AdminCancelProposalDto,
+    @CurrentUser() user: { id: string },
+  ): Promise<ProposalResponseDto> {
+    return this.governanceService.adminCancelProposal(id, user.id, dto.reason);
+  }
+}

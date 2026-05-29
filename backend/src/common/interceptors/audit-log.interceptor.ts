@@ -3,137 +3,140 @@ import {
   NestInterceptor,
   ExecutionContext,
   CallHandler,
-  Logger,
+  Optional,
 } from '@nestjs/common';
-import { Observable } from 'rxjs';
+import { Reflector } from '@nestjs/core';
+import { Observable, throwError } from 'rxjs';
 import { tap, catchError } from 'rxjs/operators';
 import { Request, Response } from 'express';
-import { throwError } from 'rxjs';
+import { AuditLogService } from '../services/audit-log.service';
+import { AuditAction, AuditResourceType } from '../entities/audit-log.entity';
+import { AUDIT_LOG_METADATA } from '../decorators/audit-log.decorator';
 
-/**
- * Audit Log Interceptor
- *
- * Logs structured audit entries for trade and dispute mutations.
- * Captures:
- * - Request ID (correlation ID)
- * - Endpoint and HTTP method
- * - Actor wallet/user
- * - Trade/Dispute ID from params or body
- * - Request/response status
- * - Timestamp
- *
- * Enables forensic traceability for incident debugging.
- */
+const MUTATION_METHODS = new Set(['POST', 'PATCH', 'PUT', 'DELETE']);
+
 @Injectable()
 export class AuditLogInterceptor implements NestInterceptor {
-  private readonly logger = new Logger(AuditLogInterceptor.name);
+  constructor(
+    @Optional() private readonly auditLogService: AuditLogService,
+    private readonly reflector: Reflector,
+  ) {}
 
   intercept(context: ExecutionContext, next: CallHandler): Observable<any> {
     const request = context.switchToHttp().getRequest<Request>();
-    const response = context.switchToHttp().getResponse<Response>();
 
-    // Extract correlation ID from request
-    const correlationId = (request as any).correlationId || 'unknown';
+    if (!MUTATION_METHODS.has(request.method)) {
+      return next.handle();
+    }
 
-    // Determine if this is a mutation endpoint (POST, PATCH, PUT, DELETE)
-    const isMutation = ['POST', 'PATCH', 'PUT', 'DELETE'].includes(
-      request.method,
-    );
+    // Check for explicit @AuditLog decorator or fall back to path-based detection
+    const metadata = this.reflector.getAllAndOverride<{
+      action?: AuditAction;
+      resourceType?: AuditResourceType;
+      description?: string;
+    } | null>(AUDIT_LOG_METADATA, [context.getHandler(), context.getClass()]);
 
-    // Extract audit-relevant paths
-    const isMutationEndpoint =
-      isMutation &&
-      (request.url.includes('/claims') ||
-        request.url.includes('/disputes') ||
-        request.url.includes('/trades'));
+    const isAuditableByPath =
+      /\/(claims|disputes|trades|savings|users|kyc|admin|withdrawals)/.test(
+        request.url,
+      );
 
-    if (!isMutationEndpoint) {
+    if (!metadata && !isAuditableByPath) {
       return next.handle();
     }
 
     const startTime = Date.now();
-    const auditEntry = this.buildAuditEntry(request, correlationId);
+    const response = context.switchToHttp().getResponse<Response>();
+    const correlationId = (request as any).correlationId ?? 'unknown';
+    const actor =
+      (request.user as any)?.email ??
+      (request.user as any)?.id ??
+      request.body?.email ??
+      'anonymous';
+    const resourceId: string | null =
+      (typeof request.params?.id === 'string' ? request.params.id : null) ??
+      (typeof request.body?.id === 'string' ? request.body.id : null);
+    const ipAddress: string | undefined = (() => {
+      const fwd = request.headers['x-forwarded-for'];
+      if (!fwd) return request.socket.remoteAddress ?? undefined;
+      const first = Array.isArray(fwd) ? fwd[0] : fwd.split(',')[0];
+      return first?.trim() ?? request.socket.remoteAddress ?? undefined;
+    })();
+    const userAgent: string | undefined = (() => {
+      const ua = request.headers['user-agent'];
+      return (Array.isArray(ua) ? ua[0] : ua) ?? undefined;
+    })();
+
+    const action =
+      metadata?.action ?? this.inferAction(request.method, request.url);
+    const resourceType =
+      metadata?.resourceType ?? this.inferResourceType(request.url);
+    const description = metadata?.description;
 
     return next.handle().pipe(
-      tap((data) => {
-        const duration = Date.now() - startTime;
-        this.logAuditEntry({
-          ...auditEntry,
-          status: response.statusCode,
-          duration,
+      tap(() => {
+        void this.auditLogService?.log({
+          correlationId,
+          endpoint: request.url,
+          method: request.method,
+          action,
+          actor,
+          resourceId,
+          resourceType,
+          statusCode: response.statusCode,
+          durationMs: Date.now() - startTime,
           success: true,
+          ipAddress,
+          userAgent,
+          description,
         });
       }),
       catchError((error) => {
-        const duration = Date.now() - startTime;
-        this.logAuditEntry({
-          ...auditEntry,
-          status: error.status || 500,
-          duration,
+        void this.auditLogService?.log({
+          correlationId,
+          endpoint: request.url,
+          method: request.method,
+          action,
+          actor,
+          resourceId,
+          resourceType,
+          statusCode: error.status ?? 500,
+          durationMs: Date.now() - startTime,
           success: false,
-          error: error.message,
+          errorMessage: error.message,
+          ipAddress,
+          userAgent,
+          description,
         });
         return throwError(() => error);
       }),
     );
   }
 
-  private buildAuditEntry(request: Request, correlationId: string) {
-    const body = request.body || {};
-    const params = request.params || {};
-
-    // Extract resource IDs
-    const tradeId = params.id || body.tradeId || body.claimId || null;
-    const disputeId = params.id || body.disputeId || null;
-    const resourceId = tradeId || disputeId;
-
-    // Extract actor (wallet or user email)
-    const actor =
-      body.actor ||
-      body.wallet ||
-      body.email ||
-      (request.user as any)?.email ||
-      'anonymous';
-
-    // Determine action type
-    const action = this.getActionType(request.method, request.url);
-
-    return {
-      correlationId,
-      timestamp: new Date().toISOString(),
-      endpoint: request.url,
-      method: request.method,
-      action,
-      actor,
-      resourceId,
-      resourceType: this.getResourceType(request.url),
-    };
+  private inferAction(method: string, url: string): AuditAction {
+    if (url.includes('/approve')) return AuditAction.APPROVE;
+    if (url.includes('/reject')) return AuditAction.REJECT;
+    if (url.includes('/escalate')) return AuditAction.ESCALATE;
+    if (url.includes('/resolve')) return AuditAction.RESOLVE;
+    if (url.includes('/export')) return AuditAction.EXPORT;
+    if (method === 'POST') return AuditAction.CREATE;
+    if (method === 'PATCH' || method === 'PUT') return AuditAction.UPDATE;
+    if (method === 'DELETE') return AuditAction.DELETE;
+    return AuditAction.UPDATE;
   }
 
-  private getActionType(method: string, url: string): string {
-    if (method === 'POST') return 'CREATE';
-    if (method === 'PATCH' || method === 'PUT') return 'UPDATE';
-    if (method === 'DELETE') return 'DELETE';
-    return 'UNKNOWN';
-  }
-
-  private getResourceType(url: string): string {
-    if (url.includes('/claims')) return 'CLAIM';
-    if (url.includes('/disputes')) return 'DISPUTE';
-    if (url.includes('/trades')) return 'TRADE';
-    return 'UNKNOWN';
-  }
-
-  private logAuditEntry(entry: any) {
-    const logMessage = `[AUDIT] ${entry.correlationId} | ${entry.action} ${entry.resourceType} | Actor: ${entry.actor} | Resource: ${entry.resourceId} | Status: ${entry.status} | Duration: ${entry.duration}ms`;
-
-    if (entry.success) {
-      this.logger.log(logMessage);
-    } else {
-      this.logger.error(`${logMessage} | Error: ${entry.error}`, 'AuditLog');
-    }
-
-    // Structured logging for log aggregation systems
-    this.logger.debug(JSON.stringify(entry), 'AuditLogStructured');
+  private inferResourceType(url: string): AuditResourceType {
+    if (url.includes('/claims')) return AuditResourceType.CLAIM;
+    if (url.includes('/disputes')) return AuditResourceType.DISPUTE;
+    if (url.includes('/savings')) return AuditResourceType.SAVINGS;
+    if (url.includes('/transactions')) return AuditResourceType.TRANSACTION;
+    if (url.includes('/kyc')) return AuditResourceType.KYC;
+    if (url.includes('/notifications')) return AuditResourceType.NOTIFICATION;
+    if (url.includes('/users') || url.includes('/user'))
+      return AuditResourceType.USER;
+    if (url.includes('/admin')) return AuditResourceType.ADMIN;
+    if (url.includes('/withdrawals'))
+      return AuditResourceType.WITHDRAWAL_REQUEST;
+    return AuditResourceType.SYSTEM;
   }
 }

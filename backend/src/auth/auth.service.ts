@@ -4,17 +4,26 @@ import {
   UnauthorizedException,
   BadRequestException,
   Inject,
+  Optional,
   forwardRef,
   Logger,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository, LessThan } from 'typeorm';
 import { UserService } from '../modules/user/user.service';
 import {
   RegisterDto,
   LoginDto,
   VerifySignatureDto,
   LinkWalletDto,
+  RefreshTokenDto,
 } from './dto/auth.dto';
+import { AuditLogService } from '../common/services/audit-log.service';
+import {
+  AuditAction,
+  AuditResourceType,
+} from '../common/entities/audit-log.entity';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Cache } from 'cache-manager';
 import * as bcrypt from 'bcrypt';
@@ -22,6 +31,10 @@ import { randomUUID } from 'crypto';
 import * as StellarSdk from '@stellar/stellar-sdk';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { AuthRateLimitService } from './services/auth-rate-limit.service';
+import { RefreshToken } from './entities/refresh-token.entity';
+import { Session } from './entities/session.entity';
+import { ConfigService } from '@nestjs/config';
+import { User } from '../modules/user/entities/user.entity';
 
 @Injectable()
 export class AuthService {
@@ -29,6 +42,10 @@ export class AuthService {
   private readonly NONCE_TTL = 300000; // 5 minutes in milliseconds
   private readonly RATE_LIMIT_WINDOW = 900000; // 15 minutes in milliseconds
   private readonly MAX_NONCE_REQUESTS = 5; // Max requests per window
+  private readonly REFRESH_TOKEN_EXPIRY_DAYS = 7;
+  private readonly MAX_FAILED_ATTEMPTS = 5;
+  private readonly LOCKOUT_DURATION_MINUTES = 60;
+  private readonly SESSION_EXPIRY_HOURS = 24;
 
   constructor(
     private readonly userService: UserService,
@@ -36,9 +53,17 @@ export class AuthService {
     private readonly eventEmitter: EventEmitter2,
     @Inject(CACHE_MANAGER) private cacheManager: Cache,
     private readonly authRateLimitService: AuthRateLimitService,
+    @InjectRepository(RefreshToken)
+    private readonly refreshTokenRepository: Repository<RefreshToken>,
+    @InjectRepository(Session)
+    private readonly sessionRepository: Repository<Session>,
+    @InjectRepository(User)
+    private readonly userRepository: Repository<User>,
+    private readonly configService: ConfigService,
+    @Optional() private readonly auditLogService?: AuditLogService,
   ) {}
 
-  async register(dto: RegisterDto) {
+  async register(dto: RegisterDto, ip?: string, userAgent?: string) {
     const existingUser = await this.userService.findByEmail(dto.email);
     if (existingUser) {
       throw new ConflictException('User already exists');
@@ -58,28 +83,64 @@ export class AuthService {
       });
     }
 
+    // Generate tokens
+    const session = await this.createSession(
+      user.id,
+      dto.deviceId || 'default',
+      dto.deviceName,
+      ip,
+      userAgent,
+    );
+    const accessToken = this.generateToken(
+      user.id,
+      user.email,
+      user.role,
+      undefined,
+      session.jti,
+    );
+    const refreshToken = await this.createRefreshToken(
+      user.id,
+      dto.deviceId || 'default',
+      dto.deviceName,
+      ip,
+      userAgent,
+    );
+
     return {
       user,
-      accessToken: this.generateToken(user.id, user.email, user.role),
+      accessToken,
+      refreshToken: refreshToken.token,
+      expiresIn: this.getExpiresInSeconds(),
     };
   }
 
-  async login(dto: LoginDto, ip?: string) {
+  async login(dto: LoginDto, ip?: string, userAgent?: string) {
     const user = await this.validateUser(dto.email, dto.password);
     if (!user) {
       // Record failed attempt
-      if (ip) {
-        await this.authRateLimitService.recordFailedAttempt(
-          dto.email,
-          ip,
-          'invalid_credentials',
-        );
-      }
+      await this.handleFailedLogin(dto.email, ip);
+      void this.auditLogService?.log({
+        action: AuditAction.LOGIN,
+        actor: dto.email,
+        resourceType: AuditResourceType.USER,
+        success: false,
+        errorMessage: 'Invalid credentials',
+        ipAddress: ip,
+        userAgent,
+        description: 'User login failed - invalid credentials',
+      });
       throw new UnauthorizedException('Invalid credentials');
     }
 
+    // Check if account is locked
+    if (user.isLocked && user.lockedUntil && user.lockedUntil > new Date()) {
+      throw new UnauthorizedException(
+        'Account is temporarily locked due to too many failed login attempts. Please try again later.',
+      );
+    }
+
     // Clear failed attempts on successful login
-    await this.authRateLimitService.clearFailedAttempts(dto.email);
+    await this.clearFailedLoginAttempts(user.id);
 
     // Check if 2FA is enabled
     const fullUser = await this.userService.findByEmail(dto.email);
@@ -91,14 +152,127 @@ export class AuthService {
       };
     }
 
+    // Generate tokens
+    const session = await this.createSession(
+      user.id,
+      dto.deviceId || 'default',
+      dto.deviceName,
+      ip,
+      userAgent,
+    );
+    const accessToken = this.generateToken(
+      user.id,
+      user.email,
+      user.role,
+      user.kycStatus,
+      session.jti,
+    );
+    const refreshToken = await this.createRefreshToken(
+      user.id,
+      dto.deviceId || 'default',
+      dto.deviceName,
+      ip,
+      userAgent,
+    );
+
+    // Update last login
+    await this.userService.update(user.id, { lastLoginAt: new Date() });
+
+    void this.auditLogService?.log({
+      action: AuditAction.LOGIN,
+      actor: user.email,
+      resourceType: AuditResourceType.USER,
+      resourceId: user.id,
+      success: true,
+      ipAddress: ip,
+      userAgent,
+      description: 'User login successful',
+    });
+
     return {
-      accessToken: this.generateToken(
-        user.id,
-        user.email,
-        user.role,
-        user.kycStatus,
-      ),
+      accessToken,
+      refreshToken: refreshToken.token,
+      expiresIn: this.getExpiresInSeconds(),
     };
+  }
+
+  private async handleFailedLogin(email: string, ip?: string): Promise<void> {
+    const user = await this.userService.findByEmail(email);
+    if (!user) {
+      // Record failed attempt for non-existent user
+      if (ip) {
+        await this.authRateLimitService.recordFailedAttempt(
+          email,
+          ip,
+          'invalid_credentials',
+        );
+      }
+      return;
+    }
+
+    // Increment failed login attempts
+    const newAttempts = (user.failedLoginAttempts || 0) + 1;
+    const updateData: Partial<User> = { failedLoginAttempts: newAttempts };
+
+    // Lock account if max attempts reached
+    if (newAttempts >= this.MAX_FAILED_ATTEMPTS) {
+      const lockedUntil = new Date();
+      lockedUntil.setMinutes(
+        lockedUntil.getMinutes() + this.LOCKOUT_DURATION_MINUTES,
+      );
+      updateData.isLocked = true;
+      updateData.lockedUntil = lockedUntil;
+
+      // Emit event for email notification
+      this.eventEmitter.emit('account.locked', {
+        userId: user.id,
+        email: user.email,
+        lockedUntil,
+        ipAddress: ip,
+      });
+
+      this.logger.warn(
+        `Account locked for user ${user.id} after ${newAttempts} failed attempts`,
+      );
+    }
+
+    await this.userRepository.update(user.id, updateData);
+
+    // Record rate limit
+    if (ip) {
+      await this.authRateLimitService.recordFailedAttempt(
+        email,
+        ip,
+        'invalid_credentials',
+      );
+    }
+  }
+
+  private async clearFailedLoginAttempts(userId: string): Promise<void> {
+    await this.userRepository.update(userId, {
+      failedLoginAttempts: 0,
+      isLocked: false,
+      lockedUntil: null,
+    });
+  }
+
+  async unlockUser(userId: string): Promise<boolean> {
+    const result = await this.userRepository.update(userId, {
+      failedLoginAttempts: 0,
+      isLocked: false,
+      lockedUntil: null,
+    });
+    return (result.affected || 0) > 0;
+  }
+
+  async isUserLocked(userId: string): Promise<boolean> {
+    const user = await this.userRepository.findOne({ where: { id: userId } });
+    if (!user) return false;
+    return (
+      user.isLocked === true &&
+      user.lockedUntil != null &&
+      user.lockedUntil > new Date()
+    );
   }
 
   async validateUser(email: string, pass: string): Promise<any> {
@@ -115,8 +289,9 @@ export class AuthService {
     email: string,
     role = 'USER',
     kycStatus = 'NOT_SUBMITTED',
+    jti?: string,
   ) {
-    return this.jwtService.sign({ sub: userId, email, role, kycStatus });
+    return this.jwtService.sign({ sub: userId, email, role, kycStatus, jti });
   }
 
   async generateNonce(publicKey: string): Promise<{ nonce: string }> {
@@ -140,11 +315,7 @@ export class AuthService {
 
     // Increment rate limit counter
     const newCount = (requestCount || 0) + 1;
-    await this.cacheManager.set(
-      rateLimitKey,
-      newCount,
-      this.RATE_LIMIT_WINDOW,
-    );
+    await this.cacheManager.set(rateLimitKey, newCount, this.RATE_LIMIT_WINDOW);
 
     // Generate nonce with timestamp for additional validation
     const nonce = randomUUID();
@@ -397,6 +568,269 @@ export class AuthService {
       return keypair.verify(Buffer.from(nonce), signatureBuffer);
     } catch (error) {
       return false;
+    }
+  }
+
+  // --- Refresh Token Methods ---
+
+  private async createRefreshToken(
+    userId: string,
+    deviceId: string,
+    deviceName?: string,
+    ipAddress?: string,
+    userAgent?: string,
+  ): Promise<RefreshToken> {
+    const token = randomUUID();
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + this.REFRESH_TOKEN_EXPIRY_DAYS);
+
+    const refreshToken = this.refreshTokenRepository.create({
+      userId,
+      token,
+      deviceId,
+      deviceName,
+      ipAddress,
+      userAgent,
+      expiresAt,
+    });
+
+    return this.refreshTokenRepository.save(refreshToken);
+  }
+
+  async refreshToken(dto: RefreshTokenDto): Promise<{
+    accessToken: string;
+    refreshToken: string;
+    expiresIn: number;
+  }> {
+    const { token, deviceId } = dto;
+
+    // Find the refresh token
+    const refreshToken = await this.refreshTokenRepository.findOne({
+      where: { token },
+      relations: ['user'],
+    });
+
+    if (!refreshToken) {
+      throw new UnauthorizedException('Invalid refresh token');
+    }
+
+    // Check if token is revoked
+    if (refreshToken.isRevoked) {
+      throw new UnauthorizedException('Refresh token has been revoked');
+    }
+
+    // Check if token is expired
+    if (refreshToken.expiresAt < new Date()) {
+      throw new UnauthorizedException('Refresh token has expired');
+    }
+
+    // Check if user is active
+    if (!refreshToken.user || !refreshToken.user.isActive) {
+      throw new UnauthorizedException('User account is not active');
+    }
+
+    // Check if user account is locked
+    if (
+      refreshToken.user.isLocked &&
+      refreshToken.user.lockedUntil &&
+      refreshToken.user.lockedUntil > new Date()
+    ) {
+      throw new UnauthorizedException('Account is locked');
+    }
+
+    // Rotate the token: revoke old and create new
+    await this.revokeRefreshToken(token);
+
+    // Create new session for token rotation
+    const newSession = await this.createSession(
+      refreshToken.user.id,
+      deviceId || refreshToken.deviceId,
+      refreshToken.deviceName,
+      refreshToken.ipAddress,
+      refreshToken.userAgent,
+    );
+
+    const newAccessToken = this.generateToken(
+      refreshToken.user.id,
+      refreshToken.user.email,
+      refreshToken.user.role,
+      refreshToken.user.kycStatus,
+      newSession.jti,
+    );
+
+    const newRefreshToken = await this.createRefreshToken(
+      refreshToken.user.id,
+      deviceId || refreshToken.deviceId,
+      refreshToken.deviceName,
+      refreshToken.ipAddress,
+      refreshToken.userAgent,
+    );
+
+    return {
+      accessToken: newAccessToken,
+      refreshToken: newRefreshToken.token,
+      expiresIn: this.getExpiresInSeconds(),
+    };
+  }
+
+  async revokeRefreshToken(token: string): Promise<boolean> {
+    const result = await this.refreshTokenRepository.update(
+      { token },
+      { isRevoked: true },
+    );
+    return (result.affected || 0) > 0;
+  }
+
+  async revokeAllUserTokens(userId: string): Promise<number> {
+    const result = await this.refreshTokenRepository.update(
+      { userId, isRevoked: false },
+      { isRevoked: true },
+    );
+    return result.affected || 0;
+  }
+
+  async revokeTokenByDevice(userId: string, deviceId: string): Promise<number> {
+    const result = await this.refreshTokenRepository.update(
+      { userId, deviceId, isRevoked: false },
+      { isRevoked: true },
+    );
+    return result.affected || 0;
+  }
+
+  async getUserActiveSessions(userId: string): Promise<RefreshToken[]> {
+    return this.refreshTokenRepository.find({
+      where: { userId, isRevoked: false },
+      select: [
+        'id',
+        'deviceId',
+        'deviceName',
+        'ipAddress',
+        'userAgent',
+        'createdAt',
+        'expiresAt',
+      ],
+      order: { createdAt: 'DESC' },
+    });
+  }
+
+  async cleanupExpiredTokens(): Promise<number> {
+    const result = await this.refreshTokenRepository.delete({
+      expiresAt: LessThan(new Date()),
+    });
+    return result.affected || 0;
+  }
+
+  // --- Session Management Methods ---
+
+  private async createSession(
+    userId: string,
+    deviceId: string,
+    deviceName?: string,
+    ipAddress?: string,
+    userAgent?: string,
+  ): Promise<Session> {
+    const jti = randomUUID();
+    const expiresAt = new Date();
+    expiresAt.setHours(expiresAt.getHours() + this.SESSION_EXPIRY_HOURS);
+
+    const session = this.sessionRepository.create({
+      userId,
+      jti,
+      deviceId,
+      deviceName,
+      ipAddress,
+      userAgent,
+      expiresAt,
+      lastAccessedAt: new Date(),
+    });
+
+    return this.sessionRepository.save(session);
+  }
+
+  async revokeSession(jti: string): Promise<boolean> {
+    const result = await this.sessionRepository.update(
+      { jti },
+      { isRevoked: true },
+    );
+    return (result.affected || 0) > 0;
+  }
+
+  async revokeAllUserSessions(userId: string): Promise<number> {
+    const result = await this.sessionRepository.update(
+      { userId, isRevoked: false },
+      { isRevoked: true },
+    );
+    const count = result.affected || 0;
+
+    if (count > 0) {
+      void this.auditLogService?.log({
+        action: AuditAction.LOGOUT,
+        actor: userId,
+        resourceType: AuditResourceType.USER,
+        resourceId: userId,
+        success: true,
+        description: `User logged out — ${count} session(s) revoked`,
+      });
+    }
+
+    return count;
+  }
+
+  async revokeUserSessionsByDevice(
+    userId: string,
+    deviceId: string,
+  ): Promise<number> {
+    const result = await this.sessionRepository.update(
+      { userId, deviceId, isRevoked: false },
+      { isRevoked: true },
+    );
+    return result.affected || 0;
+  }
+
+  async getUserSessions(userId: string): Promise<Session[]> {
+    return this.sessionRepository.find({
+      where: { userId, isRevoked: false },
+      select: [
+        'id',
+        'jti',
+        'deviceId',
+        'deviceName',
+        'ipAddress',
+        'userAgent',
+        'createdAt',
+        'expiresAt',
+        'lastAccessedAt',
+      ],
+      order: { createdAt: 'DESC' },
+    });
+  }
+
+  async cleanupExpiredSessions(): Promise<number> {
+    const result = await this.sessionRepository.delete({
+      expiresAt: LessThan(new Date()),
+    });
+    return result.affected || 0;
+  }
+
+  private getExpiresInSeconds(): number {
+    const expiration = this.configService.get<string>('jwt.expiration') || '1h';
+    const match = expiration.match(/^(\d+)([smhd])$/);
+    if (!match) return 3600;
+
+    const value = parseInt(match[1], 10);
+    const unit = match[2];
+
+    switch (unit) {
+      case 's':
+        return value;
+      case 'm':
+        return value * 60;
+      case 'h':
+        return value * 3600;
+      case 'd':
+        return value * 86400;
+      default:
+        return 3600;
     }
   }
 }

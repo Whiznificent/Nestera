@@ -75,32 +75,32 @@ export default function TransactionRow({
 
   return (
     <div
-      className="grid grid-cols-12 items-center gap-3 px-5 py-4 border-b border-white/5 text-sm md:text-[15px] hover:bg-white/5 transition-colors cursor-pointer"
+      className="grid grid-cols-1 gap-2 border-b border-white/5 px-4 py-4 text-sm transition-colors hover:bg-white/5 md:grid-cols-12 md:items-center md:gap-3 md:px-5 md:text-[15px]"
       onClick={() => onClick?.(transactionId)}
     >
-      <div className="col-span-2">
+      <div className="md:col-span-2">
         <p className="text-[#e2f8f8] font-semibold">{date}</p>
         <p className="text-[#5e8c96] text-xs mt-0.5 font-medium">{time}</p>
       </div>
 
-      <div className="col-span-2 text-[#e2f8f8]">
+      <div className="text-[#e2f8f8] md:col-span-2">
         {transactionId}
       </div>
 
-      <div className="col-span-2">
+      <div className="md:col-span-2">
         <div className="inline-flex items-center gap-2 text-[#e2f8f8] font-medium">
           {typeInfo.icon}
           <span>{typeInfo.label}</span>
         </div>
       </div>
 
-      <div className="col-span-2 text-[#e2f8f8] font-medium">{assetDetails}</div>
+      <div className="font-medium text-[#e2f8f8] md:col-span-2">{assetDetails}</div>
 
-      <div className={`col-span-2 text-right font-bold ${amountStyle}`}>
+      <div className={`font-bold md:col-span-2 md:text-right ${amountStyle}`}>
         {amountDisplay}
       </div>
 
-      <div className="col-span-2 flex justify-end">
+      <div className="md:col-span-2 md:flex md:justify-end">
         <span
           className={`inline-flex items-center justify-center gap-1.5 px-2.5 py-1 text-xs font-bold rounded-full border border-current ${statusInfo.style}`}
         >

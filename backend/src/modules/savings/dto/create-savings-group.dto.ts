@@ -37,4 +37,36 @@ export class CreateSavingsGroupDto {
   @IsNumber({}, { message: 'Target amount must be a valid number' })
   @Min(1, { message: 'Target amount must be at least 1' })
   targetAmount: number;
+
+  @ApiProperty({
+    example: 'prod-uuid-1',
+    description: 'The savings product ID this pool is based on',
+  })
+  @IsString()
+  @IsNotEmpty()
+  productId: string;
+
+  @ApiProperty({
+    example: 'GB...XYZ',
+    description: 'The multisig wallet address for the group pool',
+  })
+  @IsString()
+  @IsNotEmpty()
+  multisigAddress: string;
+
+  @ApiProperty({
+    example: 2,
+    description: 'Number of signatures required for withdrawals',
+  })
+  @IsNumber()
+  @Min(1)
+  requiredSignatures: number;
+
+  @ApiProperty({
+    example: 3,
+    description: 'Total number of signers in the multisig setup',
+  })
+  @IsNumber()
+  @Min(1)
+  totalSigners: number;
 }

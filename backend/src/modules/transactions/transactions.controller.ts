@@ -11,7 +11,9 @@ import {
 import { Response } from 'express';
 import {
   ApiBearerAuth,
+  ApiBody,
   ApiOperation,
+  ApiParam,
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
@@ -27,7 +29,7 @@ import { PageDto } from '../../common/dto/page.dto';
 @ApiTags('Transactions')
 @Controller('transactions')
 @UseGuards(JwtAuthGuard)
-@ApiBearerAuth()
+@ApiBearerAuth('access-token')
 export class TransactionsController {
   constructor(private readonly transactionsService: TransactionsService) {}
 
@@ -60,7 +62,11 @@ export class TransactionsController {
     description:
       'Streams transactions as CSV for download with controlled memory usage while respecting query filters.',
   })
-  @ApiResponse({ status: 200, description: 'CSV file stream' })
+  @ApiResponse({
+    status: 200,
+    description: 'CSV file stream',
+    schema: { type: 'string', format: 'binary' },
+  })
   @ApiResponse({
     status: 401,
     description: 'Unauthorized - Invalid or missing JWT token',
@@ -85,6 +91,20 @@ export class TransactionsController {
   }
 
   @Post(':id/tag')
+  @ApiOperation({ summary: 'Tag or categorize a transaction' })
+  @ApiParam({
+    name: 'id',
+    description: 'Transaction UUID',
+    type: 'string',
+    format: 'uuid',
+  })
+  @ApiBody({ type: TagTransactionDto })
+  @ApiResponse({
+    status: 201,
+    description: 'Transaction tagged',
+    type: TransactionResponseDto,
+  })
+  @ApiResponse({ status: 404, description: 'Transaction not found' })
   async tagTransaction(
     @CurrentUser() user: { id: string },
     @Param('id') id: string,
@@ -94,11 +114,20 @@ export class TransactionsController {
   }
 
   @Get('categories')
+  @ApiOperation({ summary: 'List all categories used by the current user' })
+  @ApiResponse({
+    status: 200,
+    description: 'Array of category strings',
+    schema: { type: 'array', items: { type: 'string' } },
+  })
   async getCategories(@CurrentUser() user: { id: string }) {
     return this.transactionsService.listCategories(user.id);
   }
 
   @Post('tags/bulk')
+  @ApiOperation({ summary: 'Bulk-tag multiple transactions' })
+  @ApiBody({ type: BulkTagDto })
+  @ApiResponse({ status: 201, description: 'Transactions updated' })
   async bulkTag(@CurrentUser() user: { id: string }, @Body() body: BulkTagDto) {
     return this.transactionsService.bulkTag(user.id, body);
   }

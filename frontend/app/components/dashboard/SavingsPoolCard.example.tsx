@@ -74,7 +74,7 @@ export default function SavingsPoolCardExample() {
   ];
 
   const handleDeposit = (poolId: string) => {
-    console.log(`Deposit clicked for pool: ${poolId}`);
+    // TODO: Implement deposit logic
     // Add your deposit logic here
   };
 

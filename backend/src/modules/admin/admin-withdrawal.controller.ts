@@ -11,7 +11,9 @@ import {
 import {
   ApiTags,
   ApiBearerAuth,
+  ApiBody,
   ApiOperation,
+  ApiParam,
   ApiResponse,
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
@@ -26,7 +28,7 @@ import { RejectWithdrawalDto } from './dto/reject-withdrawal.dto';
 import { WithdrawalStatsResponseDto } from './dto/withdrawal-stats.dto';
 
 @ApiTags('admin-withdrawals')
-@ApiBearerAuth()
+@ApiBearerAuth('access-token')
 @Controller({ path: 'admin/withdrawals', version: '1' })
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(Role.ADMIN)
@@ -58,6 +60,7 @@ export class AdminWithdrawalController {
 
   @Get(':id')
   @ApiOperation({ summary: 'Get withdrawal request detail' })
+  @ApiParam({ name: 'id', type: 'string', format: 'uuid' })
   @ApiResponse({ status: 200, description: 'Withdrawal request detail' })
   @ApiResponse({ status: 404, description: 'Withdrawal request not found' })
   async getDetail(@Param('id', ParseUUIDPipe) id: string) {
@@ -66,6 +69,7 @@ export class AdminWithdrawalController {
 
   @Post(':id/approve')
   @ApiOperation({ summary: 'Approve a pending withdrawal request' })
+  @ApiParam({ name: 'id', type: 'string', format: 'uuid' })
   @ApiResponse({ status: 200, description: 'Withdrawal request approved' })
   @ApiResponse({
     status: 400,
@@ -81,6 +85,8 @@ export class AdminWithdrawalController {
 
   @Post(':id/reject')
   @ApiOperation({ summary: 'Reject a pending withdrawal request' })
+  @ApiParam({ name: 'id', type: 'string', format: 'uuid' })
+  @ApiBody({ type: RejectWithdrawalDto })
   @ApiResponse({ status: 200, description: 'Withdrawal request rejected' })
   @ApiResponse({
     status: 400,

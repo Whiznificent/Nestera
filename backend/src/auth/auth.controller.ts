@@ -9,7 +9,9 @@ import {
   UseGuards,
   Request,
   UnauthorizedException,
+  NotFoundException,
   Ip,
+  Headers,
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
@@ -27,6 +29,7 @@ import {
   GetNonceDto,
   VerifySignatureDto,
   LinkWalletDto,
+  RefreshTokenDto,
 } from './dto/auth.dto';
 import {
   VerifyTwoFactorDto,
@@ -270,5 +273,113 @@ export class AuthController {
   @ApiResponse({ status: 200, description: '2FA status' })
   get2faStatus(@Request() req: { user: { id: string } }) {
     return this.twoFactorService.getStatus(req.user.id);
+  }
+
+  // --- Refresh Token Endpoints ---
+
+  @Post('refresh')
+  @AuthRateLimit({ limit: 10, ttl: 900000 }) // 10 per 15 minutes
+  @Throttle({ auth: { limit: 10, ttl: 15 * 60 * 1000 } })
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Refresh access token using refresh token',
+    description:
+      'Exchanges a valid refresh token for a new access token and refresh token (token rotation).',
+  })
+  @ApiResponse({ status: 200, description: 'New tokens generated' })
+  @ApiResponse({ status: 401, description: 'Invalid or expired refresh token' })
+  @ApiResponse({ status: 429, description: 'Too many refresh attempts' })
+  @ApiHeader({
+    name: 'X-RateLimit-Limit',
+    description: 'Maximum requests allowed',
+  })
+  @ApiHeader({
+    name: 'X-RateLimit-Remaining',
+    description: 'Remaining requests',
+  })
+  refreshToken(
+    @Body() dto: RefreshTokenDto,
+    @Headers('user-agent') userAgent?: string,
+  ) {
+    return this.authService.refreshToken({
+      ...dto,
+      deviceId: dto.deviceId || userAgent?.substring(0, 64),
+    });
+  }
+
+  @Post('logout')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Logout and revoke current session and refresh token',
+  })
+  @ApiResponse({ status: 200, description: 'Logged out successfully' })
+  async logout(
+    @Request() req: { user: { id: string; jti?: string } },
+    @Body('refreshToken') refreshToken?: string,
+  ) {
+    // Revoke session if JTI is present
+    if (req.user.jti) {
+      await this.authService.revokeSession(req.user.jti);
+    }
+    // Revoke refresh token if provided
+    if (refreshToken) {
+      await this.authService.revokeRefreshToken(refreshToken);
+    }
+    return { message: 'Logged out successfully' };
+  }
+
+  @Post('logout-all')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Logout from all devices' })
+  @ApiResponse({ status: 200, description: 'Logged out from all devices' })
+  async logoutAll(@Request() req: { user: { id: string } }) {
+    const tokenCount = await this.authService.revokeAllUserTokens(req.user.id);
+    const sessionCount = await this.authService.revokeAllUserSessions(
+      req.user.id,
+    );
+    return {
+      message: `Logged out from ${tokenCount} token(s) and ${sessionCount} session(s)`,
+    };
+  }
+
+  @Get('sessions')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get active sessions' })
+  @ApiResponse({ status: 200, description: 'List of active sessions' })
+  async getSessions(@Request() req: { user: { id: string } }) {
+    const sessions = await this.authService.getUserSessions(req.user.id);
+    return { sessions };
+  }
+
+  // --- Admin Endpoints ---
+
+  @Post('admin/unlock-account')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Admin: Unlock a locked user account',
+    description: 'Requires ADMIN role',
+  })
+  @ApiResponse({ status: 200, description: 'Account unlocked' })
+  @ApiResponse({ status: 401, description: 'Admin access required' })
+  @ApiResponse({ status: 404, description: 'User not found' })
+  async adminUnlockAccount(
+    @Request() req: { user: { id: string; role: string } },
+    @Body('userId') targetUserId: string,
+  ) {
+    if (req.user.role !== 'ADMIN') {
+      throw new UnauthorizedException('Admin access required');
+    }
+    const success = await this.authService.unlockUser(targetUserId);
+    if (!success) {
+      throw new NotFoundException('User not found');
+    }
+    return { message: 'Account unlocked successfully' };
   }
 }

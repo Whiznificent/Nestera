@@ -34,7 +34,8 @@ export class BackupRestoreTestService {
       'hex',
     );
     this.tmpDir = this.config.get<string>('backup.tmpDir') ?? '/tmp';
-    this.testDbName = 'nestera_restore_test';
+    this.testDbName =
+      this.config.get<string>('backup.testDb.name') || 'nestera_restore_test';
 
     this.s3 = new S3Client({
       region: this.config.get<string>('backup.s3Region') ?? 'us-east-1',
@@ -129,28 +130,23 @@ export class BackupRestoreTestService {
   }
 
   private async decrypt(inputFile: string, outputFile: string): Promise<void> {
-    const input = fs.createReadStream(inputFile);
+    const iv = Buffer.alloc(16);
+    const fd = fs.openSync(inputFile, 'r');
+    fs.readSync(fd, iv, 0, 16, 0);
+    fs.closeSync(fd);
+
+    const input = fs.createReadStream(inputFile, { start: 16 });
+    const decipher = crypto.createDecipheriv(
+      'aes-256-cbc',
+      this.encryptionKey,
+      iv,
+    );
     const output = fs.createWriteStream(outputFile);
 
-    // Read the 16-byte IV prepended during encryption
     await new Promise<void>((resolve, reject) => {
-      const chunks: Buffer[] = [];
-      input.on('data', (chunk: Buffer) => chunks.push(chunk));
-      input.on('end', () => {
-        const data = Buffer.concat(chunks);
-        const iv = data.subarray(0, 16);
-        const encrypted = data.subarray(16);
-        const decipher = crypto.createDecipheriv(
-          'aes-256-cbc',
-          this.encryptionKey,
-          iv,
-        );
-        output.write(decipher.update(encrypted));
-        output.write(decipher.final());
-        output.end();
-        output.on('finish', resolve);
-        output.on('error', reject);
-      });
+      input.pipe(decipher).pipe(output);
+      output.on('finish', resolve);
+      output.on('error', reject);
       input.on('error', reject);
     });
   }

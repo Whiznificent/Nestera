@@ -21,8 +21,8 @@ import { WaitlistController } from './waitlist.controller';
 import { SavingsExperiment } from './entities/savings-experiment.entity';
 import { SavingsExperimentAssignment } from './entities/savings-experiment-assignment.entity';
 import { ExperimentsService } from './experiments.service';
-import { SavingsGroup } from './entities/savings-group.entity';
-import { SavingsGroupMember } from './entities/savings-group-member.entity';
+import { GroupSavingsPool } from './entities/group-savings-pool.entity';
+import { GroupPoolMember } from './entities/group-pool-member.entity';
 import { SavingsGroupActivity } from './entities/savings-group-activity.entity';
 import { GroupSavingsService } from './group-savings.service';
 import { GroupSavingsController } from './group-savings.controller';
@@ -45,8 +45,8 @@ import { AutoDepositService } from './services/auto-deposit.service';
       WaitlistEvent,
       SavingsExperiment,
       SavingsExperimentAssignment,
-      SavingsGroup,
-      SavingsGroupMember,
+      GroupSavingsPool,
+      GroupPoolMember,
       SavingsGroupActivity,
       AutoDepositSchedule,
     ]),

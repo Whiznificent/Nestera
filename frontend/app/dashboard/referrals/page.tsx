@@ -4,6 +4,21 @@ import React, { useState } from "react";
 import { Users, Copy, Check, Trophy, Gift, TrendingUp } from "lucide-react";
 import { env } from "../../lib/env";
 
+const REFERRED_USERS = [
+  { name: "Alice K.", joined: "Apr 20, 2026", status: "Active", reward: "$12.00" },
+  { name: "Bob M.", joined: "Apr 15, 2026", status: "Active", reward: "$12.00" },
+  { name: "Carol T.", joined: "Apr 10, 2026", status: "Pending", reward: "$0.00" },
+  { name: "David R.", joined: "Mar 28, 2026", status: "Active", reward: "$12.00" },
+];
+
+const LEADERBOARD = [
+  { rank: 1, name: "0xAb...3f", referrals: 24, earned: "$288" },
+  { rank: 2, name: "0xCd...7a", referrals: 18, earned: "$216" },
+  { rank: 3, name: "0xEf...2b", referrals: 15, earned: "$180" },
+  { rank: 4, name: "You", referrals: 4, earned: "$36", isYou: true },
+  { rank: 5, name: "0x12...9c", referrals: 3, earned: "$24" },
+];
+
 const REFERRAL_LINK = `${env.baseUrl}/ref/${process.env.NEXT_PUBLIC_DEFAULT_REFERRAL_CODE || "0x4a8f"}`;
 
 export default function ReferralsPage() {

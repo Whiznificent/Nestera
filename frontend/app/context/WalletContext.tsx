@@ -16,6 +16,7 @@ import {
   WatchWalletChanges,
 } from "@stellar/freighter-api";
 import { Horizon } from "@stellar/stellar-sdk";
+import { env } from "../lib/env";
 
 interface Balance {
   asset_code: string;
@@ -71,8 +72,8 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
 
   const getHorizonUrl = (network: string | null) => {
     return network?.toLowerCase() === "public"
-      ? "https://horizon.stellar.org"
-      : "https://horizon-testnet.stellar.org";
+      ? env.horizonPublic
+      : env.horizonTestnet;
   };
 
   const fetchBalances = useCallback(async () => {
@@ -88,7 +89,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
       // Fetch prices
       const assetIds = Object.values(COINGECKO_IDS).join(",");
       const priceRes = await fetch(
-        `https://api.coingecko.com/api/v3/simple/price?ids=${assetIds}&vs_currencies=usd`
+        `${env.coingeckoApi}/simple/price?ids=${assetIds}&vs_currencies=usd`
       );
       const prices = await priceRes.json();
 

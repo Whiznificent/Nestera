@@ -3,7 +3,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Monitor, Moon, Settings, Sun } from "lucide-react";
 import { type Theme, useTheme } from "../../context/ThemeContext";
-import Button from "../../components/ui/Button";
+import { Button } from "@/app/components/ui/Button";
 
 type Prefs = {
   emailNotifications?: boolean;
@@ -180,12 +180,11 @@ export default function SettingsClient() {
             <div className="text-right">
               <Button
                 variant="primary"
-                size="sm"
+                size="md"
                 onClick={save}
-                disabled={saving}
                 loading={saving}
               >
-                Save Preferences
+                {saving ? "Saving..." : "Save Preferences"}
               </Button>
             </div>
           </div>

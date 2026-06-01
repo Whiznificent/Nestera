@@ -21,6 +21,7 @@ import {
   Users,
   X,
 } from "lucide-react";
+import { Button } from '@/app/components/ui/Button';
 
 const navLinks = [
   { label: "Dashboard", href: "/dashboard", icon: Home },
@@ -74,13 +75,15 @@ const Sidebar: React.FC = () => {
             <span className="text-[15px] font-bold text-[var(--color-text)]">Nestera</span>
           </Link>
 
-          <button
+          <Button
+            variant="ghost"
+            size="sm"
             className="cursor-pointer border-0 bg-transparent text-[var(--color-text-muted)] md:hidden"
             onClick={() => setOpen((current) => !current)}
             aria-label="Toggle menu"
           >
             {open ? <X size={18} /> : <Menu size={18} />}
-          </button>
+          </Button>
         </div>
 
         <nav className="flex flex-1 flex-col overflow-y-auto px-2" style={{ gap: 4 }}>
@@ -139,23 +142,27 @@ const Sidebar: React.FC = () => {
               </div>
               <div className="text-[10px] text-[var(--color-text-soft)]">Stellar Network</div>
             </div>
-            <button
-              className="ml-auto shrink-0 cursor-pointer rounded p-1 text-[var(--color-text-soft)] hover:text-[var(--color-accent)]"
+            <Button
+              variant="ghost"
+              size="sm"
+              className="ml-auto shrink-0 rounded p-1 text-[var(--color-text-soft)] hover:text-[var(--color-accent)]"
               aria-label="Copy address"
             >
               <Copy size={12} />
-            </button>
+            </Button>
           </div>
         </div>
       </aside>
 
-      <button
+      <Button
+        variant="ghost"
+        size="sm"
         className="fixed top-5 left-4 z-[60] flex h-[38px] w-[38px] items-center justify-center rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-muted)] hover:text-[var(--color-text)] md:hidden"
         onClick={() => setOpen((current) => !current)}
         aria-label="Toggle menu"
       >
         {open ? <X size={18} /> : <Menu size={18} />}
-      </button>
+      </Button>
     </>
   );
 };

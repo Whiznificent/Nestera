@@ -2,6 +2,7 @@ import React from "react";
 import { MoreHorizontal, PieChart } from "lucide-react";
 import PortfolioPerformanceChart from "./PortfolioPerformanceChart";
 import AnalyticsComparisonGrid from "./AnalyticsComparisonGrid";
+import { ChartSkeleton, DashboardCardSkeleton } from "../../components/ui/LoadingState";
 
 export const metadata = { title: "Analytics – Nestera" };
 

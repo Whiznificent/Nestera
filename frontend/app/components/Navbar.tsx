@@ -3,10 +3,11 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Loader2, Wallet } from "lucide-react";
+import { Wallet } from "lucide-react";
 import ThemeToggle from "./ThemeToggle";
 import { useWallet } from "../context/WalletContext";
 import { useToast } from "../context/ToastContext";
+import { Button } from "./ui/Button";
 import { useFocusTrap } from "../hooks/useFocusTrap";
 
 interface NavLink {
@@ -120,16 +121,16 @@ const Navbar: React.FC = () => {
     }
 
     return (
-      <button
-        type="button"
+      <Button
+        variant="primary"
+        size="md"
         onClick={connect}
-        disabled={isLoading}
+        loading={isLoading}
         title={error ?? undefined}
-        className={`inline-flex items-center justify-center gap-2 rounded-full border-none bg-[var(--color-accent)] px-6 py-3 text-sm font-semibold text-[#061a1a] shadow-sm hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:brightness-100 ${mobile ? "mt-4 w-full" : "hidden sm:inline-flex"}`}
+        className={`rounded-full ${mobile ? "mt-4 w-full" : "hidden sm:inline-flex"}`}
       >
-        {isLoading ? <Loader2 size={14} className="animate-spin" /> : null}
         {isLoading ? "Connecting..." : "Connect Wallet"}
-      </button>
+      </Button>
     );
   };
 
@@ -170,11 +171,14 @@ const Navbar: React.FC = () => {
             <ThemeToggle compact className="hidden md:flex" />
             <WalletButton />
 
+            <Button
+              variant="secondary"
+              size="sm"
             <button
               ref={menuButtonRef}
               type="button"
               onClick={() => setIsMobileMenuOpen((open) => !open)}
-              className="inline-flex items-center justify-center rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-2 text-[var(--color-text-muted)] hover:text-[var(--color-text)] md:hidden"
+              className="md:hidden p-2"
               aria-expanded={isMobileMenuOpen}
               aria-controls="mobile-menu"
               aria-label={isMobileMenuOpen ? "Close navigation menu" : "Open navigation menu"}
@@ -208,7 +212,7 @@ const Navbar: React.FC = () => {
                   />
                 </svg>
               )}
-            </button>
+            </Button>
           </div>
         </div>
       </div>

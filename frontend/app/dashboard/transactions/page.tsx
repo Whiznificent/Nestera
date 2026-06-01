@@ -4,7 +4,7 @@ import React, { useEffect, useState } from "react";
 import { Download, History, Loader2, Search, ChevronDown } from "lucide-react";
 import TransactionRow, { TransactionType, TransactionStatus } from "./components/TransactionRow";
 import { useToast } from "../../context/ToastContext";
-import Button from "../../components/ui/Button";
+import { Button } from "@/app/components/ui/Button";
 
 type TransactionRowData = {
   date: string;
@@ -138,8 +138,9 @@ export default function TransactionHistoryPage() {
         <Button
           variant="primary"
           size="md"
-          onClick={onExportCsv}
           leftIcon={<Download size={18} />}
+          onClick={onExportCsv}
+          className="bg-cyan-500 hover:bg-cyan-400 text-[#061a1a] shadow-lg"
         >
           Export CSV
         </Button>
@@ -159,14 +160,15 @@ export default function TransactionHistoryPage() {
         </div>
 
         {["Type: All", "Asset: All", "Status: All"].map((filter) => (
-          <button
-            type="button"
+          <Button
             key={filter}
-            className="flex min-h-11 items-center gap-2 rounded-xl border border-white/5 bg-[#0e2330] px-4 py-3 text-[#5e8c96] transition-all hover:border-white/10 hover:text-white"
+            variant="secondary"
+            size="md"
+            rightIcon={<ChevronDown size={14} className="opacity-70" />}
+            className="bg-[#0e2330] border-white/5 text-[#5e8c96] hover:text-white"
           >
-            <span className="text-sm font-medium">{filter}</span>
-            <ChevronDown size={14} opacity={0.7} />
-          </button>
+            {filter}
+          </Button>
         ))}
       </div>
 
@@ -216,15 +218,15 @@ export default function TransactionHistoryPage() {
         )}
 
         <div className="flex flex-wrap items-center justify-end gap-4 px-5 py-4 text-sm font-semibold">
-          <button className="min-h-11 text-[#5e8c96] transition-colors hover:text-[#e2f8f8]" aria-label="Previous page">
+          <Button variant="ghost" size="sm" className="text-[#5e8c96]" aria-label="Previous page">
             &lt; Prev
-          </button>
-          <span className="rounded-lg bg-[rgba(6,110,110,0.2)] px-4 py-1.5 text-[#e2f8f8]" aria-label="Page 1 of 12">
+          </Button>
+          <span className="rounded-lg bg-[rgba(6,110,110,0.2)] px-4 py-1.5 text-[#e2f8f8] text-sm font-semibold" aria-label="Page 1 of 12">
             Page 1 of 12
           </span>
-          <button className="flex min-h-11 items-center gap-1 text-[#e2f8f8] transition-colors hover:text-[#8ef4ef]" aria-label="Next page">
+          <Button variant="ghost" size="sm" className="text-[#e2f8f8]" aria-label="Next page">
             Next &gt;
-          </button>
+          </Button>
         </div>
       </div>
     </div>

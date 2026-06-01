@@ -3,17 +3,23 @@
 import React from "react";
 import { useWallet } from "../../context/WalletContext";
 import { Loader2, Wallet, ArrowUpRight } from "lucide-react";
+import { Button } from "../ui/Button";
+import { useWalletBalances } from "../../hooks/useWalletCache";
+import { env } from "../../lib/env";
 import Skeleton from "../ui/Skeleton";
 
 const WalletBalanceCard: React.FC = () => {
+  const { address, network, isConnected, isLoading } = useWallet();
+
+  const horizonUrl =
+    network?.toLowerCase() === "public" ? env.horizonPublic : env.horizonTestnet;
+
   const {
-    balances,
-    isConnected,
-    isLoading,
-    isBalancesLoading,
-    balanceError,
-    lastBalanceSync,
-  } = useWallet();
+    data: balances = [],
+    isLoading: isBalancesLoading,
+    error: balanceError,
+    dataUpdatedAt,
+  } = useWalletBalances(address, network, horizonUrl);
 
   if (!isConnected) {
     return (
@@ -37,6 +43,8 @@ const WalletBalanceCard: React.FC = () => {
     );
   }
 
+  const totalUsdValue = balances.reduce((acc, curr) => acc + curr.usd_value, 0);
+
   return (
     <div className="bg-[#0e2330] border border-white/5 rounded-2xl p-6 relative overflow-hidden">
       {isBalancesLoading ? (
@@ -49,9 +57,9 @@ const WalletBalanceCard: React.FC = () => {
           </div>
           <h3 className="text-white font-bold text-lg m-0">Wallet Assets</h3>
         </div>
-        <button className="text-[#08c1c1] text-xs font-semibold hover:underline flex items-center gap-1 transition-all">
+        <Button variant="ghost" size="sm" className="text-[#08c1c1] text-xs font-semibold hover:underline flex items-center gap-1 transition-all">
           Manage Assets <ArrowUpRight size={14} />
-        </button>
+        </Button>
       </div>
 
       {isBalancesLoading ? (
@@ -89,15 +97,10 @@ const WalletBalanceCard: React.FC = () => {
               </div>
               <div className="text-right">
                 <div className="text-white font-bold">
-                  {parseFloat(asset.balance).toLocaleString(undefined, {
-                    maximumFractionDigits: 4,
-                  })}
+                  {parseFloat(asset.balance).toLocaleString(undefined, { maximumFractionDigits: 4 })}
                 </div>
                 <div className="text-[#08c1c1] text-xs font-medium">
-                  ${asset.usd_value.toLocaleString(undefined, {
-                    minimumFractionDigits: 2,
-                    maximumFractionDigits: 2,
-                  })}
+                  ${asset.usd_value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </div>
               </div>
             </div>
@@ -106,18 +109,15 @@ const WalletBalanceCard: React.FC = () => {
       </div>
 
       <div className="mt-6 pt-5 border-t border-white/5">
-        {lastBalanceSync ? (
+        {dataUpdatedAt ? (
           <p className="mb-2 text-[11px] text-[#6a9fae]">
-            Last updated {new Date(lastBalanceSync).toLocaleTimeString()}
+            Last updated {new Date(dataUpdatedAt).toLocaleTimeString()}
           </p>
         ) : null}
         <div className="flex items-center justify-between text-sm">
           <span className="text-[#6a9fae]">Total Wallet Value</span>
           <span className="text-white font-bold">
-            ${balances.reduce((acc, curr) => acc + curr.usd_value, 0).toLocaleString(undefined, {
-              minimumFractionDigits: 2,
-              maximumFractionDigits: 2,
-            })}
+            ${totalUsdValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </span>
         </div>
       </div>

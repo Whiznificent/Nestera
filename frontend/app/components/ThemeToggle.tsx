@@ -3,6 +3,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import clsx from "clsx";
 import { Check, ChevronDown, Monitor, Moon, Sun } from "lucide-react";
+import { Button } from '@/app/components/ui/Button';
 import { type Theme, useTheme } from "../context/ThemeContext";
 
 const themeOptions: Array<{
@@ -94,6 +95,7 @@ export default function ThemeToggle({
 
   return (
     <div ref={containerRef} className={clsx("relative", className)}>
+      <Button
       <button
         ref={triggerRef}
         type="button"
@@ -104,8 +106,11 @@ export default function ThemeToggle({
         aria-label={`Theme: ${activeOption.label}`}
         aria-haspopup="menu"
         aria-expanded={isOpen}
+        variant="ghost"
+        size={compact ? "sm" : "md"}
         className={clsx(
-          "inline-flex items-center rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text)] shadow-sm hover:border-[var(--color-border-strong)] hover:bg-[var(--color-surface-strong)] focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--color-background)]",
+          "inline-flex items-center",
+          "shadow-sm hover:border-[var(--color-border-strong)] hover:bg-[var(--color-surface-strong)] focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--color-background)]",
           compact
             ? "h-10 w-10 justify-center"
             : "gap-2 px-3.5 py-2.5 text-sm font-medium",
@@ -143,7 +148,7 @@ export default function ThemeToggle({
             const selected = theme === value;
 
             return (
-              <button
+              <Button
                 key={value}
                 type="button"
                 role="menuitemradio"
@@ -154,11 +159,11 @@ export default function ThemeToggle({
                   setIsOpen(false);
                   triggerRef.current?.focus();
                 }}
+                variant={selected ? "secondary" : "ghost"}
+                size="md"
                 className={clsx(
-                  "flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-inset",
-                  selected
-                    ? "bg-[var(--color-accent-soft)] text-[var(--color-text)]"
-                    : "text-[var(--color-text)] hover:bg-[var(--color-surface-subtle)]"
+                  "flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors focus-visible:ring-inset",
+                  selected ? "bg-[var(--color-accent-soft)] text-[var(--color-text)]" : "text-[var(--color-text)] hover:bg-[var(--color-surface-subtle)]"
                 )}
               >
                 <span className="flex h-9 w-9 items-center justify-center rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-accent)]">

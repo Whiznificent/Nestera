@@ -10,6 +10,7 @@ import {
   HelpCircle 
 } from 'lucide-react';
 import clsx from 'clsx';
+import { Button } from "../../components/ui/Button";
 
 export type DocSection = 
   | 'getting-started' 
@@ -47,11 +48,13 @@ const DocsSidebar: React.FC<DocsSidebarProps> = ({ activeSection, onSectionChang
           Documentation
         </div>
         {sidebarItems.map((item) => (
-          <button
+          <Button
             key={item.id}
             onClick={() => onSectionChange(item.id)}
+            variant={activeSection === item.id ? "ghost" : "ghost"}
+            size="sm"
             className={clsx(
-              "flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 text-left border-none cursor-pointer",
+              "flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 text-left border-none",
               activeSection === item.id
                 ? "bg-cyan-500/10 text-cyan-400 shadow-[inset_0_0_0_1px_rgba(6,182,212,0.2)]"
                 : "text-[rgba(180,210,210,0.6)] hover:text-white hover:bg-white/5"
@@ -59,7 +62,7 @@ const DocsSidebar: React.FC<DocsSidebarProps> = ({ activeSection, onSectionChang
           >
             <item.icon size={18} />
             {item.label}
-          </button>
+          </Button>
         ))}
       </nav>
     </aside>

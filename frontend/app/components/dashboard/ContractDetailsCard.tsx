@@ -2,6 +2,7 @@
 
 import React from "react";
 import { Copy, FileCode, Calendar } from "lucide-react";
+import { Button } from '@/app/components/ui/Button';
 
 export type RiskLevel = "Low Risk" | "Medium Risk" | "High Risk";
 
@@ -108,17 +109,20 @@ const ContractDetailsCard: React.FC<ContractDetailsCardProps> = ({
           <code className="text-cyan-400 font-mono text-sm flex-1 truncate">
             {truncateAddress(contract.contractId, 8)}
           </code>
-          <button
+          <Button
+            variant="ghost"
+            size="sm"
             onClick={handleCopyContractId}
             className="p-2 hover:bg-white/5 rounded-lg transition-colors duration-200"
             title="Copy contract ID"
+            aria-label="Copy contract ID"
           >
             <Copy
               className={`w-4 h-4 transition-colors duration-200 ${
                 copied ? "text-emerald-400" : "text-[#7a9fa9]"
               }`}
             />
-          </button>
+          </Button>
         </div>
         {copied && (
           <p className="text-emerald-400 text-xs mt-2">Copied to clipboard</p>

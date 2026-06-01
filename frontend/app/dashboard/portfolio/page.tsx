@@ -1,8 +1,8 @@
 "use client";
 
 import React, { useState } from "react";
-import { Briefcase, TrendingUp, TrendingDown, Download, MoreHorizontal } from "lucide-react";
-import Button from "../../components/ui/Button";
+import { Briefcase, TrendingUp, Download, MoreHorizontal } from "lucide-react";
+import { Button } from "@/app/components/ui/Button";
 
 const ASSETS = [
   { name: "USDC Flexible", type: "Savings", balance: 2400, value: 2400, apy: 6.5, pnl: 156, pnlPct: 6.9 },
@@ -68,14 +68,14 @@ export default function PortfolioPage() {
           </div>
         </div>
         <Button
-          variant="secondary"
-          size="sm"
-          onClick={handleExport}
-          disabled={exporting}
-          loading={exporting}
+          variant="outline"
+          size="md"
           leftIcon={<Download size={15} />}
+          onClick={handleExport}
+          loading={exporting}
+          className="border-cyan-500/20 bg-cyan-500/10 text-cyan-300 hover:bg-cyan-500/20"
         >
-          Export CSV
+          {exporting ? "Exporting…" : "Export CSV"}
         </Button>
       </div>
 
@@ -99,9 +99,9 @@ export default function PortfolioPage() {
       <div className="rounded-2xl border border-[rgba(8,120,120,0.12)] bg-gradient-to-b from-[rgba(6,18,20,0.55)] to-[rgba(4,12,14,0.45)] p-5 mb-6">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-base font-semibold text-white m-0">Performance</h2>
-          <button className="text-[#7caeb6] hover:text-cyan-300 transition-colors" aria-label="Options">
+          <Button variant="ghost" size="sm" aria-label="Options">
             <MoreHorizontal size={18} />
-          </button>
+          </Button>
         </div>
         <div className="flex items-end gap-2 h-28">
           {PERFORMANCE.map((p) => (

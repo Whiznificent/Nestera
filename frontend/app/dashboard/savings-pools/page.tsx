@@ -13,7 +13,7 @@ import SavingsPoolCard, {
   type SavingsPool,
 } from "@/app/components/dashboard/SavingsPoolCard";
 import { useToast } from "@/app/context/ToastContext";
-import Button from "../../components/ui/Button";
+import { Button } from "@/app/components/ui/Button";
 
 export default function GoalBasedSavingsPage() {
   const [searchQuery, setSearchQuery] = useState("");
@@ -128,14 +128,14 @@ export default function GoalBasedSavingsPage() {
         {/* View Toggles & Actions */}
         <div className="flex flex-wrap items-center gap-3">
           <div className="flex bg-[#0e2330] p-1 rounded-xl border border-white/5" role="group" aria-label="View mode toggle">
-            <button className="min-h-11 p-2 rounded-lg bg-cyan-500/10 text-cyan-400 shadow-sm" aria-label="Grid view" aria-pressed="true">
+            <Button variant="ghost" size="sm" className="bg-cyan-500/10 text-cyan-400 shadow-sm" aria-label="Grid view" aria-pressed="true">
               <LayoutGrid size={18} />
-            </button>
-            <button className="min-h-11 p-2 rounded-lg text-[#5e8c96] hover:text-white transition-colors" aria-label="List view" aria-pressed="false">
+            </Button>
+            <Button variant="ghost" size="sm" className="text-[#5e8c96]" aria-label="List view" aria-pressed="false">
               <List size={18} />
-            </button>
+            </Button>
           </div>
-          <Button variant="primary" size="md" aria-label="Create new goal">
+          <Button variant="primary" size="md" className="bg-cyan-500 hover:bg-cyan-400 text-[#061a1a] shadow-lg" aria-label="Create new goal">
             Create New Goal
           </Button>
         </div>
@@ -163,17 +163,15 @@ export default function GoalBasedSavingsPage() {
             { label: "Risk: All Levels", active: false },
             { label: "Sort by: APY", active: false },
           ].map((filter, i) => (
-            <button
+            <Button
               key={i}
-              className={`flex items-center gap-2 px-4 py-3 rounded-xl border transition-all ${
-                filter.active
-                  ? "bg-cyan-500/5 border-cyan-500/20 text-cyan-400"
-                  : "bg-[#0e2330] border-white/5 text-[#5e8c96] hover:border-white/10 hover:text-white"
-              } min-h-11`}
+              variant={filter.active ? "outline" : "secondary"}
+              size="md"
+              rightIcon={<ChevronDown size={14} className="opacity-70" />}
+              className={filter.active ? "border-cyan-500/20 text-cyan-400 bg-cyan-500/5" : "bg-[#0e2330] border-white/5 text-[#5e8c96] hover:text-white"}
             >
-              <span className="text-sm font-medium">{filter.label}</span>
-              <ChevronDown size={14} opacity={0.7} />
-            </button>
+              {filter.label}
+            </Button>
           ))}
         </div>
       </div>
@@ -226,8 +224,10 @@ export default function GoalBasedSavingsPage() {
             looking for.
           </p>
           <Button
-            variant="secondary"
+            variant="outline"
+            size="md"
             onClick={() => setSearchQuery("")}
+            className="mt-6 border-cyan-500/30 text-cyan-400 bg-cyan-500/10 hover:bg-cyan-500/20"
           >
             Clear Search
           </Button>

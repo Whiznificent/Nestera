@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import { Button } from "./ui/Button";
 
 const Newsletter: React.FC = () => {
   const [email, setEmail] = useState("");
@@ -8,8 +9,6 @@ const Newsletter: React.FC = () => {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (email) {
-      // TODO: Implement newsletter subscription
-      // Send the email to your backend API
       setEmail("");
     }
   };
@@ -29,9 +28,7 @@ const Newsletter: React.FC = () => {
           onSubmit={handleSubmit}
         >
           <div className="flex-1 max-w-[400px] max-md:max-w-full">
-            <label htmlFor="newsletter-email" className="sr-only">
-              Email address
-            </label>
+            <label htmlFor="newsletter-email" className="sr-only">Email address</label>
             <input
               id="newsletter-email"
               type="email"
@@ -43,13 +40,9 @@ const Newsletter: React.FC = () => {
               aria-describedby="newsletter-help"
             />
           </div>
-          <button
-            type="submit"
-            className="px-6 py-3 bg-[#00d1c1] text-[#020c0c] border-none rounded-md text-sm font-semibold cursor-pointer transition-all duration-200 hover:opacity-90 active:scale-[0.98]"
-            aria-label="Subscribe to newsletter"
-          >
+          <Button type="submit" variant="primary" size="md" aria-label="Subscribe to newsletter">
             Submit
-          </button>
+          </Button>
         </form>
       </div>
     </section>

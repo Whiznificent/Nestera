@@ -3,7 +3,7 @@
 import React, { useState } from "react";
 import { Users, Copy, Check, Trophy, Gift, TrendingUp } from "lucide-react";
 import { env } from "../../lib/env";
-import Button from "../../components/ui/Button";
+import { Button } from "@/app/components/ui/Button";
 
 const REFERRED_USERS = [
   { name: "Alice K.", joined: "Apr 20, 2026", status: "Active", reward: "$12.00" },
@@ -73,10 +73,11 @@ export default function ReferralsPage() {
             {REFERRAL_LINK}
           </div>
           <Button
-            variant="secondary"
-            size="sm"
-            onClick={copy}
+            variant="outline"
+            size="md"
             leftIcon={copied ? <Check size={15} /> : <Copy size={15} />}
+            onClick={copy}
+            className="border-cyan-500/25 text-cyan-300 bg-cyan-500/15 hover:bg-cyan-500/25 shrink-0"
           >
             {copied ? "Copied!" : "Copy"}
           </Button>

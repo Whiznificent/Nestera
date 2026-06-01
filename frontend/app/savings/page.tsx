@@ -19,6 +19,7 @@ import {
   Redo2,
 } from "lucide-react";
 import GoalCard, { GoalStatus } from "./components/GoalCard";
+import { Button } from "../components/ui/Button";
 import Button from "../components/ui/Button";
 import { useUndoRedo } from "../hooks/useUndoRedo";
 import { useToast } from "../context/ToastContext";
@@ -143,6 +144,7 @@ export default function GoalBasedSavingsPage() {
               </p>
             </div>
             <div className="flex items-center gap-3">
+              <Button variant="outline" size="md">View Templates</Button>
               <Button variant="outline">
                 View Templates
               </Button>
@@ -267,6 +269,19 @@ export default function GoalBasedSavingsPage() {
               <option value="behind-schedule">Behind Schedule</option>
               <option value="paused">Paused</option>
             </select>
+            <Button
+              variant="secondary"
+              size="md"
+              rightIcon={<ChevronDown size={14} className="opacity-70" />}
+              onClick={() => setSortBy(sortBy === "Progress" ? "Target" : "Progress")}
+              className="bg-[#0e2330] border-white/5 text-[#d3ecef]"
+            >
+              Sort: {sortBy}
+            </Button>
+<div className="flex bg-[#0e2330] p-1 rounded-xl border border-white/5" role="group" aria-label="View mode toggle">
+               <Button
+                 variant="ghost"
+                 size="sm"
             <button
               type="button"
               onClick={() => setFilter({ sortBy: sortBy === "Progress" ? "Target" : "Progress" })}
@@ -279,27 +294,22 @@ export default function GoalBasedSavingsPage() {
                <button
                  type="button"
                  onClick={() => setViewMode("grid")}
-                 className={`p-2 rounded-lg transition-colors ${viewMode === "grid"
-                   ? "bg-cyan-500/10 text-cyan-400"
-                   : "text-[#5e8c96] hover:text-white"
-                   }`}
+                 className={viewMode === "grid" ? "bg-cyan-500/10 text-cyan-400" : "text-[#5e8c96]"}
                  aria-label="Grid view"
                  aria-pressed={viewMode === "grid"}
                >
                  <LayoutGrid size={18} />
-               </button>
-               <button
-                 type="button"
+               </Button>
+               <Button
+                 variant="ghost"
+                 size="sm"
                  onClick={() => setViewMode("list")}
-                 className={`p-2 rounded-lg transition-colors ${viewMode === "list"
-                   ? "bg-cyan-500/10 text-cyan-400"
-                   : "text-[#5e8c96] hover:text-white"
-                   }`}
+                 className={viewMode === "list" ? "bg-cyan-500/10 text-cyan-400" : "text-[#5e8c96]"}
                  aria-label="List view"
                  aria-pressed={viewMode === "list"}
                >
                  <List size={18} />
-               </button>
+               </Button>
              </div>
             {/* Undo / Redo */}
             <div className="flex gap-1" role="group" aria-label="Undo redo filters">

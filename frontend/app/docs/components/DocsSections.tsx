@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { Button } from "../../components/ui/Button";
 import { DocSection } from './DocsSidebar';
 import { Copy, ExternalLink, Terminal, ShieldCheck, Target, HelpCircle } from 'lucide-react';
 
@@ -16,9 +17,9 @@ const CodeBlock: React.FC<{ code: string; language?: string }> = ({ code, langua
     <div className="p-6 pt-8 rounded-xl bg-[#030f0f] border border-white/5 font-mono text-sm overflow-x-auto text-[rgba(255,255,255,0.8)]">
       <pre><code>{code}</code></pre>
     </div>
-<button className="absolute top-4 right-4 p-2 rounded-lg bg-white/5 text-white/40 hover:text-white hover:bg-white/10 transition-all opacity-0 group-hover:opacity-100" aria-label="Copy code to clipboard">
+    <Button className="absolute top-4 right-4 p-2 rounded-lg bg-white/5 text-white/40 hover:text-white hover:bg-white/10 transition-all opacity-0 group-hover:opacity-100" variant="ghost" size="sm" aria-label="Copy code to clipboard">
        <Copy size={16} />
-     </button>
+     </Button>
   </div>
 );
 

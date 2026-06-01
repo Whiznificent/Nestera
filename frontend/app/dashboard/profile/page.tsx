@@ -16,6 +16,7 @@ import {
   ShieldCheck,
   Clock,
 } from 'lucide-react';
+import { Button } from '@/app/components/ui/Button';
 
 /* ─── mock data ─────────────────────────────────────── */
 const MOCK_USER = {
@@ -60,13 +61,15 @@ function CopyButton({ text }: { text: string }) {
     setTimeout(() => setCopied(false), 2000);
   };
   return (
-    <button
+    <Button
+      variant="ghost"
+      size="sm"
       onClick={handleCopy}
-      className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-[#4a8090] hover:text-[#9ef0f0] transition-all cursor-pointer border-0"
+      className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-[#4a8090] hover:text-[#9ef0f0] transition-all"
       aria-label="Copy"
     >
       {copied ? <Check size={13} className="text-emerald-400" /> : <Copy size={13} />}
-    </button>
+    </Button>
   );
 }
 
@@ -122,13 +125,15 @@ export default function ProfilePage() {
               ) : (
                 <>
                   <h1 className="text-lg font-bold text-white truncate">{displayName}</h1>
-                  <button
+                  <Button
+                    variant="ghost"
+                    size="sm"
                     onClick={() => { setTempName(displayName); setEditingName(true); }}
-                    className="text-[#4a8090] hover:text-cyan-400 bg-transparent border-0 cursor-pointer p-0.5 transition-colors"
+                    className="text-[#4a8090] hover:text-cyan-400 bg-transparent p-0.5"
                     aria-label="Edit name"
                   >
                     <Edit3 size={14} />
-                  </button>
+                  </Button>
                 </>
               )}
             </div>
@@ -208,9 +213,13 @@ export default function ProfilePage() {
             ))}
           </div>
 
-          <button className="w-full py-2.5 rounded-xl border border-dashed border-white/[0.12] text-[#4a8090] hover:border-cyan-500/30 hover:text-cyan-400 text-xs font-semibold transition-all bg-transparent cursor-pointer">
+          <Button
+            variant="outline"
+            size="md"
+            className="w-full py-2.5 rounded-xl border-dashed border-white/[0.12] text-[#4a8090] hover:border-cyan-500/30 hover:text-cyan-400 text-xs font-semibold transition-all"
+          >
             + Connect Another Wallet
-          </button>
+          </Button>
         </div>
 
         {/* Activity history */}

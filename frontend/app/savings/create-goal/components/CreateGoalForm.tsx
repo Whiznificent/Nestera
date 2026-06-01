@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import { ChevronDown, X } from "lucide-react";
+import { Button } from "../../../components/ui/Button";
 
 export default function CreateGoalForm() {
   const [formData, setFormData] = useState({
@@ -42,13 +43,9 @@ export default function CreateGoalForm() {
         <div className="rounded-2xl border border-white/10 bg-[#0D2626] shadow-2xl overflow-hidden relative">
           <div className="px-6 pt-5 flex items-center justify-between">
             <h2 className="text-2xl font-bold text-white">Create New Goal</h2>
-            <button
-              type="button"
-              className="text-[#8C9BAB] hover:text-white transition-colors"
-              aria-label="Close"
-            >
+            <Button type="button" variant="ghost" size="sm" className="text-[#8C9BAB] hover:text-white transition-colors" aria-label="Close">
               <X size={24} />
-            </button>
+            </Button>
           </div>
           <form className="p-6 space-y-5">
             {/* Goal Name */}
@@ -232,18 +229,12 @@ export default function CreateGoalForm() {
 
             {/* Footer Actions */}
             <div className="flex gap-3 pt-5">
-              <button
-                type="button"
-                className="flex-1 px-4 py-2.5 border border-white/10 rounded-lg text-[#8C9BAB] font-semibold hover:bg-white/10 transition-colors"
-              >
+              <Button type="button" variant="outline" size="md" className="flex-1 px-4 py-2.5 border border-white/10 rounded-lg text-[#8C9BAB] font-semibold hover:bg-white/10 transition-colors">
                 Cancel
-              </button>
-              <button
-                type="submit"
-                className="flex-1 px-4 py-2.5 bg-[#00D9C0] hover:bg-[#00b3a0] text-white font-semibold rounded-lg transition-all active:scale-95"
-              >
+              </Button>
+              <Button type="submit" variant="primary" size="md" className="flex-1 px-4 py-2.5 bg-[#00D9C0] hover:bg-[#00b3a0] text-white font-semibold rounded-lg transition-all active:scale-95">
                 Create Goal
-              </button>
+              </Button>
             </div>
           </form>
         </div>

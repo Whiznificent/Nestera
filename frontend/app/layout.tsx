@@ -4,6 +4,8 @@ import type { Metadata } from "next";
 import { ThemeProvider } from "./context/ThemeContext";
 import { WalletProvider } from "./context/WalletContext";
 import { ToastProvider } from "./context/ToastContext";
+import { WalletReconnectBanner } from "./components/WalletReconnectBanner";
+import { QueryProvider } from "./context/QueryProvider";
 import QueryProvider from "./providers/QueryProvider";
 import ErrorBoundary from "./components/ErrorBoundary";
 import KeyboardShortcutsProvider from "./providers/KeyboardShortcutsProvider";
@@ -56,17 +58,16 @@ export default function RootLayout({
         <a href="#main-content" className="skip-link">
           Skip to content
         </a>
-        <QueryProvider>
-          <ThemeProvider>
+        <ThemeProvider>
+          <QueryProvider>
             <WalletProvider>
               <ToastProvider>
-                <KeyboardShortcutsProvider>
-                  <main id="main-content">{children}</main>
-                </KeyboardShortcutsProvider>
+                <WalletReconnectBanner />
+                <main id="main-content">{children}</main>
               </ToastProvider>
             </WalletProvider>
-          </ThemeProvider>
-        </QueryProvider>
+          </QueryProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

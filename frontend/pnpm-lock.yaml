@@ -14,6 +14,15 @@ importers:
       '@stellar/stellar-sdk':
         specifier: ^15.0.1
         version: 15.1.0
+      '@tanstack/query-sync-storage-persister':
+        specifier: 5.80.2
+        version: 5.80.2
+      '@tanstack/react-query':
+        specifier: 5.80.2
+        version: 5.80.2(react@19.2.3)
+      '@tanstack/react-query-persist-client':
+        specifier: 5.80.2
+        version: 5.80.2(@tanstack/react-query@5.80.2(react@19.2.3))(react@19.2.3)
       clsx:
         specifier: ^2.1.1
         version: 2.1.1
@@ -592,6 +601,26 @@ packages:
 
   '@tailwindcss/postcss@4.3.0':
     resolution: {integrity: sha512-Jm05Tjx+9yCLGv5qw1c+84Psds8MnyrEQYCB+FFk2lgGiUjlRqdxke4mVTuYrj2xnVZqKim2Apr5ySuQRYAw/w==}
+
+  '@tanstack/query-core@5.80.2':
+    resolution: {integrity: sha512-g2Es97uwFk7omkWiH9JmtLWSA8lTUFVseIyzqbjqJEEx7qN+Hg6jbBdDvelqtakamppaJtGORQ64hEJ5S6ojSg==}
+
+  '@tanstack/query-persist-client-core@5.80.2':
+    resolution: {integrity: sha512-FAmLNf6PcKebtQ70wyESJoAAUdXBE1JUVdA56sVBhDKI2GIxemcD5jwgEaqFICBOVUltFYusU7FYkL1iePg8+Q==}
+
+  '@tanstack/query-sync-storage-persister@5.80.2':
+    resolution: {integrity: sha512-+gsuRkVn8tpotXgnBteXQc/gM6pMsWAYuRW3PFnUoidV9wPAVG09SumW9DNGW8DBL537zwmGGbSsXckzanJndw==}
+
+  '@tanstack/react-query-persist-client@5.80.2':
+    resolution: {integrity: sha512-PQGFGnVSfL4tdgi2Bb8y/Oacc1dEGQag/39tRcQTBICI8PVMIKPOv6KY1Ti1tJkl4lDl64gSV1ttelgOrk29MA==}
+    peerDependencies:
+      '@tanstack/react-query': ^5.80.2
+      react: ^18 || ^19
+
+  '@tanstack/react-query@5.80.2':
+    resolution: {integrity: sha512-LfA0SVheJBOqC8RfJw/JbOW3yh2zuONQeWU5Prjm7yjUGUONeOedky1Bj39Cfj8MRdXrZV+DxNT7/DN/M907lQ==}
+    peerDependencies:
+      react: ^18 || ^19
 
   '@tybys/wasm-util@0.10.2':
     resolution: {integrity: sha512-RoBvJ2X0wuKlWFIjrwffGw1IqZHKQqzIchKaadZZfnNpsAYp2mM0h36JtPCjNDAHGgYez/15uMBpfGwchhiMgg==}
@@ -2698,6 +2727,28 @@ snapshots:
       '@tailwindcss/oxide': 4.3.0
       postcss: 8.5.15
       tailwindcss: 4.3.0
+
+  '@tanstack/query-core@5.80.2': {}
+
+  '@tanstack/query-persist-client-core@5.80.2':
+    dependencies:
+      '@tanstack/query-core': 5.80.2
+
+  '@tanstack/query-sync-storage-persister@5.80.2':
+    dependencies:
+      '@tanstack/query-core': 5.80.2
+      '@tanstack/query-persist-client-core': 5.80.2
+
+  '@tanstack/react-query-persist-client@5.80.2(@tanstack/react-query@5.80.2(react@19.2.3))(react@19.2.3)':
+    dependencies:
+      '@tanstack/query-persist-client-core': 5.80.2
+      '@tanstack/react-query': 5.80.2(react@19.2.3)
+      react: 19.2.3
+
+  '@tanstack/react-query@5.80.2(react@19.2.3)':
+    dependencies:
+      '@tanstack/query-core': 5.80.2
+      react: 19.2.3
 
   '@tybys/wasm-util@0.10.2':
     dependencies:

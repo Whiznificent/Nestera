@@ -1,4 +1,5 @@
 import React from "react";
+import { Button } from '@/app/components/ui/Button';
 import Link from "next/link";
 import { Calendar, ChevronRight } from "lucide-react";
 import Button from "../ui/Button";
@@ -112,6 +113,7 @@ export default function GoalCard({
       </div>
 
       <div className="flex items-center justify-between gap-3">
+        <Button className="px-4 py-2.5 rounded-2xl shadow-[0_10px_18px_rgba(0,212,192,0.15)]" variant="primary" size="md">
         <Button variant="primary" size="sm">
           Contribute
         </Button>

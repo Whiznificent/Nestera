@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { Button } from "../ui/Button";
 import { CheckCircle2, ChevronRight } from "lucide-react";
 import Button from "../ui/Button";
 
@@ -75,7 +76,7 @@ export default function PassedProposalCard({ proposal }: { proposal: PassedPropo
         </div>
 
         <div className="mt-5 flex items-center justify-between">
-          <Button variant="primary" size="sm">
+          <Button variant="primary" size="md" className="px-4 py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-[#061a1a] font-bold transition-all active:scale-95">
             View details
           </Button>
           <a

@@ -6,6 +6,7 @@ import { TypeOrmHealthIndicator } from './indicators/typeorm.health';
 import { IndexerHealthIndicator } from './indicators/indexer.health';
 import { RpcHealthIndicator } from './indicators/rpc.health';
 import { ConnectionPoolHealthIndicator } from './indicators/connection-pool.health';
+import { SystemHealthIndicator } from './indicators/system.health';
 import {
   RedisHealthIndicator,
   EmailServiceHealthIndicator,
@@ -30,6 +31,7 @@ import { DeadLetterEvent } from '../blockchain/entities/dead-letter-event.entity
     IndexerHealthIndicator,
     RpcHealthIndicator,
     ConnectionPoolHealthIndicator,
+    SystemHealthIndicator,
     RedisHealthIndicator,
     EmailServiceHealthIndicator,
     SorobanRpcHealthIndicator,

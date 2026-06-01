@@ -262,7 +262,7 @@ export class SavingsService {
               .filter((s) => s.status === SubscriptionStatus.ACTIVE)
               .reduce((sum, s) => sum + Number(s.amount), 0)
           : 0;
-        const capacity = await this.getProductCapacitySnapshot(product.id);
+        const capacity = await this.getProductCapacitySnapshot(product.id, product);
 
         return {
           id: product.id,
@@ -899,8 +899,9 @@ export class SavingsService {
 
   async getProductCapacitySnapshot(
     productId: string,
+    preFetchedProduct?: SavingsProduct,
   ): Promise<ProductCapacitySnapshot> {
-    const product = await this.findOneProduct(productId);
+    const product = preFetchedProduct || await this.findOneProduct(productId);
     const maxCapacity =
       product.maxCapacity != null
         ? Number(product.maxCapacity)
@@ -927,15 +928,21 @@ export class SavingsService {
     }
 
     if (source === 'database') {
-      const total = await this.subscriptionRepository
-        .createQueryBuilder('subscription')
-        .select('COALESCE(SUM(subscription.amount), 0)', 'total')
-        .where('subscription.productId = :productId', { productId })
-        .andWhere('subscription.status = :status', {
-          status: SubscriptionStatus.ACTIVE,
-        })
-        .getRawOne<{ total: string }>();
-      utilizedCapacity = Number(total?.total ?? 0);
+      if (product.subscriptions) {
+        utilizedCapacity = product.subscriptions
+          .filter((s) => s.status === SubscriptionStatus.ACTIVE)
+          .reduce((sum, s) => sum + Number(s.amount), 0);
+      } else {
+        const total = await this.subscriptionRepository
+          .createQueryBuilder('subscription')
+          .select('COALESCE(SUM(subscription.amount), 0)', 'total')
+          .where('subscription.productId = :productId', { productId: product.id })
+          .andWhere('subscription.status = :status', {
+            status: SubscriptionStatus.ACTIVE,
+          })
+          .getRawOne<{ total: string }>();
+        utilizedCapacity = Number(total?.total ?? 0);
+      }
     }
 
     const availableCapacity =

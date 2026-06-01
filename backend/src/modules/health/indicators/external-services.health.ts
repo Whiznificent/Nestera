@@ -10,6 +10,9 @@ interface ServiceHealth {
   error?: string;
 }
 
+import * as net from 'net';
+import { URL } from 'url';
+
 @Injectable()
 export class RedisHealthIndicator extends HealthIndicator {
   private readonly logger = new Logger(RedisHealthIndicator.name);
@@ -28,23 +31,68 @@ export class RedisHealthIndicator extends HealthIndicator {
     }
 
     const startTime = Date.now();
-    try {
-      // Simple ping test
-      const response = await axios.get(redisUrl, { timeout: 5000 });
-      const responseTime = Date.now() - startTime;
+    return new Promise<HealthIndicatorResult>((resolve) => {
+      let host = 'localhost';
+      let port = 6379;
 
-      return this.getStatus(key, true, {
-        responseTime: `${responseTime}ms`,
-      });
-    } catch (error) {
-      const responseTime = Date.now() - startTime;
-      this.logger.error(`Redis health check failed: ${error}`);
+      try {
+        const parsed = new URL(redisUrl);
+        host = parsed.hostname || 'localhost';
+        port = parsed.port ? parseInt(parsed.port, 10) : 6379;
+      } catch (e) {
+        const match = redisUrl.match(/(?:redis:\/\/)?([^:/]+)(?::(\d+))?/);
+        if (match) {
+          host = match[1];
+          port = match[2] ? parseInt(match[2], 10) : 6379;
+        }
+      }
 
-      return this.getStatus(key, false, {
-        responseTime: `${responseTime}ms`,
-        error: error instanceof Error ? error.message : 'Unknown error',
+      const socket = new net.Socket();
+      socket.setTimeout(3000);
+
+      const cleanup = () => {
+        socket.removeAllListeners();
+        socket.destroy();
+      };
+
+      socket.connect(port, host, () => {
+        socket.write('PING\r\n');
       });
-    }
+
+      socket.on('data', (data) => {
+        cleanup();
+        const duration = Date.now() - startTime;
+        resolve(
+          this.getStatus(key, true, {
+            responseTime: `${duration}ms`,
+          })
+        );
+      });
+
+      socket.on('error', (err) => {
+        cleanup();
+        const duration = Date.now() - startTime;
+        this.logger.error(`Redis health check failed to connect: ${err.message}`);
+        resolve(
+          this.getStatus(key, false, {
+            responseTime: `${duration}ms`,
+            error: err.message,
+          })
+        );
+      });
+
+      socket.on('timeout', () => {
+        cleanup();
+        const duration = Date.now() - startTime;
+        this.logger.error('Redis health check timed out');
+        resolve(
+          this.getStatus(key, false, {
+            responseTime: `${duration}ms`,
+            error: 'Connection timeout',
+          })
+        );
+      });
+    });
   }
 }
 

@@ -53,10 +53,7 @@ export const envValidationSchema = Joi.object({
   BACKUP_S3_REGION: Joi.string().optional(),
   BACKUP_AWS_ACCESS_KEY_ID: Joi.string().optional(),
   BACKUP_AWS_SECRET_ACCESS_KEY: Joi.string().optional(),
-  BACKUP_ENCRYPTION_KEY: Joi.string()
-    .length(64)
-    .hex()
-    .optional(),
+  BACKUP_ENCRYPTION_KEY: Joi.string().length(64).hex().optional(),
   BACKUP_RETENTION_DAYS: Joi.number().integer().min(1).default(30).optional(),
   BACKUP_TMP_DIR: Joi.string().optional(),
   BACKUP_TEST_DB_HOST: Joi.string().hostname().optional(),

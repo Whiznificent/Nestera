@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import ErrorBoundary from "../components/ErrorBoundary";
 
 export const metadata: Metadata = {
   title: "Goal-Based Savings - Nestera",
@@ -10,5 +11,5 @@ export default function SavingsLayout({
 }: {
   children: React.ReactNode;
 }) {
-  return <>{children}</>;
+  return <ErrorBoundary>{children}</ErrorBoundary>;
 }

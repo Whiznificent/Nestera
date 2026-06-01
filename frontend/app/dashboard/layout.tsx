@@ -1,6 +1,7 @@
 import React from "react";
 import Sidebar from "../components/dashboard/Sidebar";
 import TopNav from "../components/dashboard/TopNav";
+import ErrorBoundary from "../components/ErrorBoundary";
 
 export const metadata = {
   title: "Dashboard - Nestera",

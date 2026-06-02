@@ -31,5 +31,6 @@ export const env = {
   discord: process.env.NEXT_PUBLIC_DISCORD_URL || "https://discord.gg/nestera",
   telegram: process.env.NEXT_PUBLIC_TELEGRAM_URL || "https://t.me/nestera",
   github: process.env.NEXT_PUBLIC_GITHUB_URL || "https://github.com/nestera",
-  twitter: process.env.NEXT_PUBLIC_TWITTER_URL || "https://twitter.com/nestera",
+  walletWsUrl: process.env.NEXT_PUBLIC_WALLET_WS_URL || "wss://example.com/ws",
+
 } as const;

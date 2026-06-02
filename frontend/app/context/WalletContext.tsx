@@ -8,6 +8,8 @@ import React, {
   useRef,
   useState,
 } from "react";
+// Import WebSocket hook
+
 import { usePrices, getAssetPrice } from "../hooks/usePrices";
 import { env } from "../lib/env";
 import { queryClient } from "./QueryProvider";
@@ -103,7 +105,9 @@ const INITIAL_STATE: WalletState = {
 
 export function WalletProvider({ children }: { children: React.ReactNode }) {
   const [state, setState] = useState<WalletState>(INITIAL_STATE);
-  const refreshInterval = useRef<ReturnType<typeof setInterval> | null>(null);
+// Removed refreshInterval and polling logic; will use WebSocket for live balances.
+// We'll keep the ref for potential fallback polling.
+const refreshInterval = useRef<ReturnType<typeof setInterval> | null>(null);
   const disconnectCheckInterval = useRef<ReturnType<typeof setInterval> | null>(null);
   const connectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { data: prices } = usePrices();
@@ -116,6 +120,8 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
       queryClient.removeQueries({ queryKey: ["balances"] });
       return;
     }
+
+// Removed fetchBalances polling interval references elsewhere; unchanged.
 
     setState((s) => ({ ...s, isBalancesLoading: true, balanceError: null }));
 
@@ -230,17 +236,34 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     };
   }, [state.isConnected]);
 
-  useEffect(() => {
-    if (state.address) {
-      fetchBalances();
+// Use WebSocket for real-time balances
+  const { balances: wsBalances, status: wsStatus, error: wsError } = useWalletWebSocket(state.address);
 
+  // Sync WebSocket balances to state
+  useEffect(() => {
+    if (wsBalances && wsBalances.length > 0) {
+      const totalUsd = wsBalances.reduce((acc, b) => acc + b.usd_value, 0);
+      setState((s) => ({
+        ...s,
+        balances: wsBalances,
+        totalUsdValue: totalUsd,
+        isBalancesLoading: false,
+        balanceError: null,
+        lastBalanceSync: Date.now(),
+      }));
+    }
+    if (wsError) {
+      // fallback to polling if WebSocket fails
+      fetchBalances();
       if (refreshInterval.current) clearInterval(refreshInterval.current);
       refreshInterval.current = setInterval(fetchBalances, 30000);
-    } else {
-      if (refreshInterval.current) {
-        clearInterval(refreshInterval.current);
-        refreshInterval.current = null;
-      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [wsBalances, wsError, state.address]);
+
+  // Cleanup when address changes
+  useEffect(() => {
+    if (!state.address) {
       setState((s) => ({
         ...s,
         balances: [],
@@ -250,11 +273,11 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
         lastBalanceSync: null,
       }));
     }
+  }, [state.address]);
 
-    return () => {
-      if (refreshInterval.current) clearInterval(refreshInterval.current);
-    };
-  }, [state.address, fetchBalances]);
+  // Remove old polling interval effect
+  // (the block from lines 233-257 has been replaced)
+
 
   const connect = useCallback(async () => {
     setState((s) => ({ ...s, isLoading: true, error: null, connectionStatus: "connecting" }));

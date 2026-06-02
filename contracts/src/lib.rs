@@ -1,5 +1,8 @@
 #![no_std]
 #![allow(non_snake_case)]
+#![doc = include_str!("../CONTRACT_REFERENCE.md")]
+#![doc = include_str!("../docs/CONTRACT_OPERATIONS.md")]
+#![doc = include_str!("../docs/FORMAL_VERIFICATION.md")]
 use soroban_sdk::{
     contract, contractimpl, panic_with_error, symbol_short, xdr::ToXdr, Address, Bytes, BytesN,
     Env, String, Symbol, Vec,

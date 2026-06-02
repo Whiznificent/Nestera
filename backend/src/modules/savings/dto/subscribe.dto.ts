@@ -3,7 +3,7 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsStellarPublicKey } from '../../../common/validators/is-stellar-key.validator';
 
 export class SubscribeDto {
-  @ApiProperty({ description: 'Savings product ID to subscribe to' })
+  @ApiProperty({ example: 'f47ac10b-58cc-4372-a567-0e02b2c3d479', description: 'Savings product ID to subscribe to' })
   @IsUUID()
   productId: string;
 

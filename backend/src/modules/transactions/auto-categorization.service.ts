@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { TransactionCategory } from './entities/transaction.entity';
+import { LedgerTransaction } from '../blockchain/entities/transaction.entity';
 
 /**
  * Simple rule-based auto-categorization service.
@@ -48,5 +49,19 @@ export class AutoCategorizationService {
     }
 
     return null;
+  }
+
+  categorize(
+    transaction: Pick<LedgerTransaction, 'metadata'>,
+  ): { category: TransactionCategory; tags: string[] } | null {
+    const category = this.predictCategory(transaction.metadata ?? undefined);
+    if (!category) {
+      return null;
+    }
+
+    return {
+      category,
+      tags: [category.toLowerCase().replace(/\s+/g, '-')],
+    };
   }
 }

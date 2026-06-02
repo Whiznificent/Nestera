@@ -31,6 +31,24 @@ export class ProposalResponseDto {
   })
   type: ProposalType | null;
 
+  @ApiPropertyOptional({
+    description: 'Template identifier used to create this proposal, if any',
+    example: 'rate-change-standard',
+  })
+  templateId?: string | null;
+
+  @ApiPropertyOptional({
+    description: 'Template version used to create this proposal, if any',
+    example: '1.0',
+  })
+  templateVersion?: string | null;
+
+  @ApiPropertyOptional({
+    description: 'Template parameters used to generate the action payload',
+    type: 'object',
+  })
+  templateParameters?: Record<string, unknown> | null;
+
   @ApiProperty({
     nullable: true,
     description: 'Structured action payload for the proposal',

@@ -88,7 +88,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
           <div
             key={toast.id}
             role="status"
-            className={`pointer-events-auto overflow-hidden rounded-2xl border shadow-2xl backdrop-blur-sm ${typeClasses[toast.type]}`}
+            className={`pointer-events-auto overflow-hidden rounded-2xl border shadow-2xl backdrop-blur-sm animate-slide-in-right ${typeClasses[toast.type]}`}
           >
             <div className="flex items-start gap-3 p-4">
               <span className="mt-0.5 shrink-0">{typeIcon[toast.type]}</span>

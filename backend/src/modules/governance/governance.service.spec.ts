@@ -235,6 +235,65 @@ describe('GovernanceService', () => {
       expect(result.canEdit).toBe(true);
     });
 
+    it('creates a governance proposal from a template with generated action payload', async () => {
+      userService.findById.mockResolvedValue({
+        id: 'user-1',
+        publicKey: 'GUSERPUBLICKEY123',
+      });
+      savingsService.getUserVaultBalance.mockResolvedValue(2_000_000_000);
+      proposalRepo.findOne.mockResolvedValue({ onChainId: 7 });
+      proposalRepo.create.mockImplementation((input) => ({
+        id: 'proposal-2',
+        createdAt: new Date('2026-03-30T12:00:00.000Z'),
+        updatedAt: new Date('2026-03-30T12:00:00.000Z'),
+        ...input,
+      }));
+      proposalRepo.save.mockImplementation(async (proposal) => proposal);
+
+      const result = await service.createProposal('user-1', {
+        description: 'Allocate treasury funds for community incentives',
+        templateId: 'treasury-allocation',
+        templateParameters: {
+          recipient: 'GRECIPIENT789',
+          amount: 1200,
+          asset: 'NST',
+          reason: 'Community incentive program',
+        },
+      });
+
+      expect(proposalRepo.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          onChainId: 8,
+          proposer: 'GUSERPUBLICKEY123',
+          createdByUserId: 'user-1',
+          category: ProposalCategory.TREASURY,
+          type: ProposalType.TREASURY_ALLOCATION,
+          templateId: 'treasury-allocation',
+          templateVersion: '1.0',
+          templateParameters: {
+            recipient: 'GRECIPIENT789',
+            amount: 1200,
+            asset: 'NST',
+            reason: 'Community incentive program',
+          },
+          action: {
+            recipient: 'GRECIPIENT789',
+            amount: 1200,
+            asset: 'NST',
+            reason: 'Community incentive program',
+          },
+        }),
+      );
+      expect(result.templateId).toBe('treasury-allocation');
+      expect(result.templateVersion).toBe('1.0');
+      expect(result.action).toEqual({
+        recipient: 'GRECIPIENT789',
+        amount: 1200,
+        asset: 'NST',
+        reason: 'Community incentive program',
+      });
+    });
+
     it('rejects proposal creation when user is below the voting-power threshold', async () => {
       userService.findById.mockResolvedValue({
         id: 'user-1',

@@ -46,7 +46,7 @@ const WalletBalanceCard: React.FC = () => {
   const totalUsdValue = balances.reduce((acc, curr) => acc + curr.usd_value, 0);
 
   return (
-    <div className="bg-[#0e2330] border border-white/5 rounded-2xl p-6 relative overflow-hidden">
+    <div className="card-hover bg-[#0e2330] border border-white/5 rounded-2xl p-6 relative overflow-hidden">
       {isBalancesLoading ? (
         <div className="absolute top-0 left-0 h-1 w-full bg-[#08c1c1]/40 animate-pulse" />
       ) : null}

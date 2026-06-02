@@ -4,6 +4,7 @@ import { Response } from 'express';
 import { GovernanceAnalyticsService } from './governance-analytics.service';
 import { ParticipationStatsDto } from './dto/participation-stats.dto';
 import { ProposalAnalyticsDto } from './dto/proposal-analytics.dto';
+import { TemplateUsageDto } from './dto/template-usage.dto';
 import { TopVoterDto } from './dto/top-voter.dto';
 import { GovernanceTrendDto } from './dto/governance-trend.dto';
 
@@ -40,6 +41,13 @@ export class GovernanceAnalyticsController {
   @ApiResponse({ status: 200, type: GovernanceTrendDto })
   async getTrends(): Promise<GovernanceTrendDto> {
     return this.analyticsService.getTrends();
+  }
+
+  @Get('templates')
+  @ApiOperation({ summary: 'Get governance template usage analytics' })
+  @ApiResponse({ status: 200, type: [TemplateUsageDto] })
+  async getTemplateUsage(): Promise<TemplateUsageDto[]> {
+    return this.analyticsService.getTemplateUsage();
   }
 
   @Get('export')

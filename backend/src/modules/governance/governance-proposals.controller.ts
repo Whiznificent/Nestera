@@ -25,6 +25,8 @@ import { EditProposalDto } from './dto/edit-proposal.dto';
 import { CastVoteDto } from './dto/cast-vote.dto';
 import { ProposalListItemDto } from './dto/proposal-list-item.dto';
 import { ProposalResponseDto } from './dto/proposal-response.dto';
+import { ProposalTemplateDetailDto } from './dto/proposal-template-detail.dto';
+import { ProposalTemplateSummaryDto } from './dto/proposal-template-summary.dto';
 import { ProposalVotesResponseDto } from './dto/proposal-votes-response.dto';
 import { ProposalStatus } from './entities/governance-proposal.entity';
 import { GovernanceService } from './governance.service';
@@ -119,6 +121,28 @@ export class GovernanceProposalsController {
     }
 
     return this.governanceService.getProposals(status);
+  }
+
+  @Get('templates')
+  @ApiOperation({ summary: 'List governance proposal templates' })
+  @ApiResponse({ status: 200, type: [ProposalTemplateSummaryDto] })
+  getProposalTemplates(): ProposalTemplateSummaryDto[] {
+    return this.governanceService.getProposalTemplates();
+  }
+
+  @Get('templates/:templateId')
+  @ApiOperation({ summary: 'Get details for a governance proposal template' })
+  @ApiQuery({
+    name: 'version',
+    required: false,
+    description: 'Template version to use. Defaults to the latest available version.',
+  })
+  @ApiResponse({ status: 200, type: ProposalTemplateDetailDto })
+  getProposalTemplate(
+    @Param('templateId') templateId: string,
+    @Query('version') version?: string,
+  ): ProposalTemplateDetailDto {
+    return this.governanceService.getProposalTemplateById(templateId, version);
   }
 
   @Post(':id/vote')

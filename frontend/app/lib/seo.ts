@@ -51,7 +51,6 @@ export function generatePageMetadata(params: PageMetadataParams): Metadata {
         'max-image-preview': 'large',
       },
     },
-    canonical: canonicalUrl,
     openGraph: {
       type,
       title,

@@ -84,6 +84,8 @@ export class AllExceptionsFilter implements ExceptionFilter {
       return response.status(httpStatus).json({
         success: false,
         statusCode: httpStatus,
+        correlationId:
+          (request as Request & { correlationId?: string }).correlationId,
         errorCode: isTimeout ? 'SOROBAN_RPC_TIMEOUT' : 'SOROBAN_RPC_EXHAUSTED',
         timestamp: new Date().toISOString(),
         path: request.url,
@@ -105,6 +107,8 @@ export class AllExceptionsFilter implements ExceptionFilter {
       return response.status(statusCode).json({
         success: false,
         statusCode,
+        correlationId:
+          (request as Request & { correlationId?: string }).correlationId,
         errorCode: 'DB_CONNECTION_ERROR',
         timestamp: new Date().toISOString(),
         path: request.url,
@@ -145,9 +149,13 @@ export class AllExceptionsFilter implements ExceptionFilter {
       message = status >= 500 ? 'Internal server error' : 'An error occurred';
     }
 
-    const errorResponse: any = {
+    const errorResponse: Record<string, unknown> = {
       success: false,
       statusCode: status,
+      correlationId:
+        (request as Request & { correlationId?: string }).correlationId ??
+        (request.headers['x-correlation-id'] as string) ??
+        undefined,
       timestamp: new Date().toISOString(),
       path: request.url,
       message:

@@ -19,6 +19,10 @@ import { ProposalListItemDto } from './dto/proposal-list-item.dto';
 import { ProposalResponseDto } from './dto/proposal-response.dto';
 import { ProposalVotesResponseDto } from './dto/proposal-votes-response.dto';
 import {
+  getProposalTemplate as getProposalTemplateDefinition,
+  listProposalTemplates,
+} from './proposal-templates';
+import {
   GovernanceProposal,
   ProposalActionPayload,
   ProposalCategory,
@@ -71,7 +75,46 @@ export class GovernanceService {
       );
     }
 
-    const normalizedAction = this.validateProposalAction(dto.type, dto.action);
+    const template = dto.templateId
+      ? getProposalTemplateDefinition(dto.templateId, dto.templateVersion)
+      : null;
+
+    if (dto.templateId && !template) {
+      throw new BadRequestException(
+        `Unknown proposal template '${dto.templateId}'`,
+      );
+    }
+
+    if (template && dto.type && dto.type !== template.type) {
+      throw new BadRequestException(
+        `Template ${template.id} requires proposal type ${template.type}`,
+      );
+    }
+
+    const type = template?.type ?? dto.type;
+    if (!type) {
+      throw new BadRequestException(
+        'Proposal type is required unless a valid template is selected',
+      );
+    }
+
+    if (template && dto.action) {
+      throw new BadRequestException(
+        'Action payload must not be provided when using a proposal template. Use templateParameters instead.',
+      );
+    }
+
+    const action = template
+      ? template.actionFactory(dto.templateParameters ?? {})
+      : dto.action;
+
+    if (!action) {
+      throw new BadRequestException(
+        'Proposal action is required when not using a template',
+      );
+    }
+
+    const normalizedAction = this.validateProposalAction(type, action);
     const currentLedger = await this.getCurrentLedger();
     const startBlock =
       dto.startBlock ?? currentLedger + this.getStartDelayLedgers();
@@ -96,7 +139,10 @@ export class GovernanceService {
       title,
       description: dto.description,
       category,
-      type: dto.type,
+      type,
+      templateId: template?.id ?? null,
+      templateVersion: template?.version ?? null,
+      templateParameters: template ? dto.templateParameters ?? {} : null,
       action: normalizedAction,
       attachments: dto.attachments ?? [],
       proposer: user.publicKey,
@@ -272,6 +318,18 @@ export class GovernanceService {
         },
       };
     });
+  }
+
+  getProposalTemplates() {
+    return listProposalTemplates();
+  }
+
+  getProposalTemplateById(templateId: string, version?: string) {
+    const template = getProposalTemplateDefinition(templateId, version);
+    if (!template) {
+      throw new NotFoundException(`Template '${templateId}' not found`);
+    }
+    return template;
   }
 
   async getUserDelegation(userId: string): Promise<DelegationResponseDto> {
@@ -550,6 +608,11 @@ export class GovernanceService {
       governanceTokenContractId,
       user.publicKey,
     );
+    const votingPower = (balance / 10_000_000).toLocaleString(undefined, {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    });
+    return { votingPower: `${votingPower} NST` };
 
     return Number(balance) / 10_000_000;
   }
@@ -710,6 +773,9 @@ export class GovernanceService {
       description: proposal.description,
       category: proposal.category,
       type: proposal.type,
+      templateId: proposal.templateId ?? null,
+      templateVersion: proposal.templateVersion ?? null,
+      templateParameters: proposal.templateParameters ?? null,
       action: proposal.action,
       status: proposal.status,
       proposer: proposal.proposer ?? null,

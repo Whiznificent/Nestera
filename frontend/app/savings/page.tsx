@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import GoalCard, { GoalStatus } from "./components/GoalCard";
 import { useOptimisticUpdate } from "../hooks/useOptimisticUpdate";
+import { ResponsiveTable } from "@/app/components/ui/ResponsiveTable";
 
 // export const metadata = { title: "Goal-Based Savings - Nestera" };
 
@@ -137,6 +138,48 @@ export default function GoalBasedSavingsPage() {
       // Show error toast here
     }
   }, [goals]);
+  const contributions = [
+    {
+      date: "2026-03-25",
+      goalName: "Emergency Fund",
+      type: "Auto",
+      amount: "+$150.00",
+      status: "Completed",
+      statusStyle: "bg-emerald-500/15 border-emerald-400/30 text-emerald-200",
+    },
+    {
+      date: "2026-03-24",
+      goalName: "Travel Fund",
+      type: "Manual",
+      amount: "+$200.00",
+      status: "Completed",
+      statusStyle: "bg-emerald-500/15 border-emerald-400/30 text-emerald-200",
+    },
+    {
+      date: "2026-03-23",
+      goalName: "New Laptop",
+      type: "Auto",
+      amount: "+$75.00",
+      status: "Pending",
+      statusStyle: "bg-amber-500/15 border-amber-400/30 text-amber-200",
+    },
+    {
+      date: "2026-03-22",
+      goalName: "Car Fund",
+      type: "Manual",
+      amount: "+$300.00",
+      status: "Completed",
+      statusStyle: "bg-emerald-500/15 border-emerald-400/30 text-emerald-200",
+    },
+    {
+      date: "2026-03-21",
+      goalName: "Education Fund",
+      type: "Auto",
+      amount: "+$100.00",
+      status: "Completed",
+      statusStyle: "bg-emerald-500/15 border-emerald-400/30 text-emerald-200",
+    },
+  ];
 
   const filteredGoals = React.useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
@@ -403,72 +446,65 @@ export default function GoalBasedSavingsPage() {
           <h3 className="text-xl font-semibold text-white">Recent Contributions</h3>
           <a href="#" className="text-cyan-400 hover:text-cyan-300 text-sm font-medium">View All →</a>
         </div>
-        <div className="rounded-2xl border border-white/10 bg-[#0f2c2c] overflow-hidden shadow-[0_12px_30px_rgba(2,12,12,0.45)]">
-          <div className="grid grid-cols-5 px-6 py-3 border-b border-white/10 text-[#6a8a93] text-xs font-bold uppercase tracking-widest">
-            <div>Date</div>
-            <div>Goal Name</div>
-            <div>Type</div>
-            <div>Amount</div>
-            <div>Status</div>
-          </div>
-          {[
-            {
-              date: "2026-03-25",
-              goalName: "Emergency Fund",
-              type: "Auto",
-              amount: "+$150.00",
-              status: "Completed",
-              statusStyle: "bg-emerald-500/15 border-emerald-400/30 text-emerald-200",
-            },
-            {
-              date: "2026-03-24",
-              goalName: "Travel Fund",
-              type: "Manual",
-              amount: "+$200.00",
-              status: "Completed",
-              statusStyle: "bg-emerald-500/15 border-emerald-400/30 text-emerald-200",
-            },
-            {
-              date: "2026-03-23",
-              goalName: "New Laptop",
-              type: "Auto",
-              amount: "+$75.00",
-              status: "Pending",
-              statusStyle: "bg-amber-500/15 border-amber-400/30 text-amber-200",
-            },
-            {
-              date: "2026-03-22",
-              goalName: "Car Fund",
-              type: "Manual",
-              amount: "+$300.00",
-              status: "Completed",
-              statusStyle: "bg-emerald-500/15 border-emerald-400/30 text-emerald-200",
-            },
-            {
-              date: "2026-03-21",
-              goalName: "Education Fund",
-              type: "Auto",
-              amount: "+$100.00",
-              status: "Completed",
-              statusStyle: "bg-emerald-500/15 border-emerald-400/30 text-emerald-200",
-            },
-          ].map((contribution, index) => (
-            <div
-              key={index}
-              className="grid grid-cols-5 px-6 py-4 border-b border-white/10 last:border-0 text-sm text-white hover:bg-white/5 transition-colors"
-            >
+        <ResponsiveTable
+          items={contributions}
+          columns={[
+            { key: "date", label: "Date", sortable: true, width: "20%" },
+            { key: "goalName", label: "Goal Name", sortable: true, width: "28%" },
+            { key: "type", label: "Type", sortable: true, width: "16%" },
+            { key: "amount", label: "Amount", sortable: true, width: "18%", align: "right" },
+            { key: "status", label: "Status", sortable: true, width: "18%", align: "right" },
+          ]}
+          rowKey={(contribution) => `${contribution.date}-${contribution.goalName}`}
+          pageSize={4}
+          showColumnVisibility={true}
+          initialSortKey="date"
+          renderDesktopHeader={(visibleColumns) => (
+            <div className="grid grid-cols-5 px-6 py-3 border-b border-white/10 text-[#6a8a93] text-xs font-bold uppercase tracking-widest">
+              {visibleColumns.includes("date") && <div>Date</div>}
+              {visibleColumns.includes("goalName") && <div>Goal Name</div>}
+              {visibleColumns.includes("type") && <div>Type</div>}
+              {visibleColumns.includes("amount") && <div className="text-right">Amount</div>}
+              {visibleColumns.includes("status") && <div className="text-right">Status</div>}
+            </div>
+          )}
+          renderDesktopRow={(contribution) => (
+            <div className="grid grid-cols-5 px-6 py-4 border-b border-white/10 last:border-0 text-sm text-white hover:bg-white/5 transition-colors">
               <div className="text-[#b1d7da]">{contribution.date}</div>
               <div className="text-white font-medium">{contribution.goalName}</div>
               <div className="text-[#6faab0]">{contribution.type}</div>
-              <div className="text-emerald-300 font-semibold">{contribution.amount}</div>
+              <div className="text-right text-emerald-300 font-semibold">{contribution.amount}</div>
               <div className="text-right">
                 <span className={`inline-flex items-center justify-center px-3 py-1 text-xs font-semibold rounded-full border ${contribution.statusStyle}`}>
                   {contribution.status}
                 </span>
               </div>
             </div>
-          ))}
-        </div>
+          )}
+          renderMobileCard={(contribution) => (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <p className="text-sm font-semibold text-white">{contribution.goalName}</p>
+                  <p className="text-xs uppercase tracking-[0.18em] text-[#5e8c96]">{contribution.date}</p>
+                </div>
+                <div className="text-right text-sm text-emerald-300 font-semibold">{contribution.amount}</div>
+              </div>
+              <div className="rounded-3xl border border-white/10 bg-[#0d2329] p-4 text-sm text-[#c7e8e8]">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-[#94b9bf]">Type</span>
+                  <span>{contribution.type}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-[#94b9bf]">Status</span>
+                  <span className={`inline-flex items-center justify-center rounded-full px-3 py-1 text-xs font-semibold border ${contribution.statusStyle}`}>
+                    {contribution.status}
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
+        />
       </div>
     </section>
   );

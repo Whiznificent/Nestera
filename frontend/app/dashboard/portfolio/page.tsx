@@ -1,8 +1,12 @@
 "use client";
 
 import React, { useState } from "react";
-import { Briefcase, TrendingUp, Download, MoreHorizontal } from "lucide-react";
 import { Button } from "@/app/components/ui/Button";
+import { ResponsiveTable, TableColumn } from "@/app/components/ui/ResponsiveTable";
+import React from "react";
+import { Briefcase, TrendingUp, Download, FileJson, FileText, MoreHorizontal } from "lucide-react";
+import { useExport } from "@/app/hooks/useExport";
+import { useToast } from "@/app/context/ToastContext";
 
 const ASSETS = [
   { name: "USDC Flexible", type: "Savings", balance: 2400, value: 2400, apy: 6.5, pnl: 156, pnlPct: 6.9 },
@@ -29,35 +33,25 @@ const TYPE_COLORS: Record<string, string> = {
   Group: "text-amber-400 bg-amber-400/10",
 };
 
+const exportRows = ASSETS.map(({ name, type, balance, value, apy, pnl, pnlPct }) => ({
+  name, type, balance, "value_usd": value, "apy_pct": apy, "pnl_usd": pnl, "pnl_pct": pnlPct,
+}));
+
 export default function PortfolioPage() {
-  const [exporting, setExporting] = useState(false);
+  const toast = useToast();
+  const { exportData, loading } = useExport({
+    onSuccess: (fmt, name) => toast.success("Export complete", `${name} downloaded`),
+    onError: () => toast.error("Export failed", "Please try again"),
+  });
 
   const totalValue = ASSETS.reduce((s, a) => s + a.value, 0);
   const totalPnl = ASSETS.reduce((s, a) => s + a.pnl, 0);
   const totalPnlPct = ((totalPnl / (totalValue - totalPnl)) * 100).toFixed(2);
 
-  const handleExport = () => {
-    setExporting(true);
-    const csv = [
-      "Name,Type,Balance,Value (USD),APY (%),P&L (USD),P&L (%)",
-      ...ASSETS.map((a) =>
-        `${a.name},${a.type},${a.balance},${a.value},${a.apy},${a.pnl},${a.pnlPct}`
-      ),
-    ].join("\n");
-    const blob = new Blob([csv], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "nestera-portfolio.csv";
-    a.click();
-    URL.revokeObjectURL(url);
-    setTimeout(() => setExporting(false), 1000);
-  };
-
   return (
     <div className="w-full">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-gradient-to-b from-[#063d3d] to-[#0a6f6f] flex items-center justify-center text-[#5de0e0]">
             <Briefcase size={20} />
@@ -67,16 +61,30 @@ export default function PortfolioPage() {
             <p className="text-[#5e8c96] text-sm m-0">All assets and positions</p>
           </div>
         </div>
-        <Button
-          variant="outline"
-          size="md"
-          leftIcon={<Download size={15} />}
-          onClick={handleExport}
-          loading={exporting}
-          className="border-cyan-500/20 bg-cyan-500/10 text-cyan-300 hover:bg-cyan-500/20"
-        >
-          {exporting ? "Exporting…" : "Export CSV"}
-        </Button>
+
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => exportData(exportRows, { format: "csv", filename: "nestera-portfolio" })}
+            disabled={loading}
+            className="inline-flex items-center gap-2 px-3 py-2 bg-cyan-500 hover:bg-cyan-400 disabled:opacity-50 text-[#061a1a] font-bold rounded-xl transition-all active:scale-95 text-sm"
+          >
+            <Download size={14} /> CSV
+          </button>
+          <button
+            onClick={() => exportData(exportRows, { format: "json", filename: "nestera-portfolio" })}
+            disabled={loading}
+            className="inline-flex items-center gap-2 px-3 py-2 bg-cyan-500/10 hover:bg-cyan-500/20 disabled:opacity-50 border border-cyan-500/30 text-cyan-300 font-semibold rounded-xl transition-all active:scale-95 text-sm"
+          >
+            <FileJson size={14} /> JSON
+          </button>
+          <button
+            onClick={() => exportData(exportRows, { format: "pdf", filename: "nestera-tax-report", pdfTitle: "Nestera Tax Report" })}
+            disabled={loading}
+            className="inline-flex items-center gap-2 px-3 py-2 bg-emerald-500/10 hover:bg-emerald-500/20 disabled:opacity-50 border border-emerald-500/30 text-emerald-300 font-semibold rounded-xl transition-all active:scale-95 text-sm"
+          >
+            <FileText size={14} /> Tax PDF
+          </button>
+        </div>
       </div>
 
       {/* Summary cards */}
@@ -99,9 +107,9 @@ export default function PortfolioPage() {
       <div className="rounded-2xl border border-[rgba(8,120,120,0.12)] bg-gradient-to-b from-[rgba(6,18,20,0.55)] to-[rgba(4,12,14,0.45)] p-5 mb-6">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-base font-semibold text-white m-0">Performance</h2>
-          <Button variant="ghost" size="sm" aria-label="Options">
+          <button type="button" className="text-[#7caeb6] hover:text-cyan-300 transition-colors" aria-label="Options">
             <MoreHorizontal size={18} />
-          </Button>
+          </button>
         </div>
         <div className="flex items-end gap-2 h-28">
           {PERFORMANCE.map((p) => (
@@ -119,39 +127,62 @@ export default function PortfolioPage() {
       {/* Asset breakdown */}
       <div className="rounded-2xl border border-[rgba(8,120,120,0.12)] bg-gradient-to-b from-[rgba(6,18,20,0.55)] to-[rgba(4,12,14,0.45)] p-5">
         <h2 className="text-base font-semibold text-white mb-4">Asset Breakdown</h2>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-left text-xs uppercase tracking-wider text-[#4a7080] border-b border-white/5">
-                <th className="pb-3 font-medium">Asset</th>
-                <th className="pb-3 font-medium">Type</th>
-                <th className="pb-3 font-medium text-right">Value</th>
-                <th className="pb-3 font-medium text-right">APY</th>
-                <th className="pb-3 font-medium text-right">P&amp;L</th>
-              </tr>
-            </thead>
-            <tbody>
-              {ASSETS.map((a) => (
-                <tr key={a.name} className="border-b border-white/3 last:border-0">
-                  <td className="py-3 text-white font-medium">{a.name}</td>
-                  <td className="py-3">
-                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${TYPE_COLORS[a.type]}`}>
-                      {a.type}
-                    </span>
-                  </td>
-                  <td className="py-3 text-right text-[#c8e8e8]">${a.value.toLocaleString()}</td>
-                  <td className="py-3 text-right text-cyan-300">{a.apy}%</td>
-                  <td className="py-3 text-right">
-                    <span className="flex items-center justify-end gap-1 text-emerald-300">
-                      <TrendingUp size={13} />
-                      +${a.pnl} ({a.pnlPct}%)
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <ResponsiveTable
+          items={ASSETS}
+          columns={[
+            { key: "name", label: "Asset", sortable: true, width: "30%" },
+            { key: "type", label: "Type", sortable: true, width: "18%" },
+            { key: "value", label: "Value", sortable: true, width: "16%", align: "right" },
+            { key: "apy", label: "APY", sortable: true, width: "16%", align: "right" },
+            { key: "pnl", label: "P&L", sortable: true, width: "20%", align: "right" },
+          ]}
+          rowKey={(asset) => asset.name}
+          pageSize={4}
+          showColumnVisibility={true}
+          initialSortKey="value"
+          renderDesktopHeader={(visibleColumns) => (
+            <div className="grid grid-cols-[2.2fr_1fr_1fr_1fr_1fr] gap-4 px-5 py-3 border-b border-white/10 text-[#4a7080] text-xs uppercase tracking-widest">
+              {visibleColumns.includes("name") && <div>Asset</div>}
+              {visibleColumns.includes("type") && <div>Type</div>}
+              {visibleColumns.includes("value") && <div className="text-right">Value</div>}
+              {visibleColumns.includes("apy") && <div className="text-right">APY</div>}
+              {visibleColumns.includes("pnl") && <div className="text-right">P&L</div>}
+            </div>
+          )}
+          renderDesktopRow={(asset) => (
+            <div className="grid grid-cols-[2.2fr_1fr_1fr_1fr_1fr] gap-4 px-5 py-4 border-b border-white/10 items-center text-sm text-[#d5f1f1]">
+              <div className="font-medium text-white">{asset.name}</div>
+              <div>
+                <span className={`text-xs px-2 py-1 rounded-full font-semibold ${TYPE_COLORS[asset.type]}`}>
+                  {asset.type}
+                </span>
+              </div>
+              <div className="text-right">${asset.value.toLocaleString()}</div>
+              <div className="text-right text-cyan-300">{asset.apy}%</div>
+              <div className="text-right text-emerald-300">+${asset.pnl} ({asset.pnlPct}%)</div>
+            </div>
+          )}
+          renderMobileCard={(asset) => (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-white font-semibold">{asset.name}</p>
+                  <p className="text-xs uppercase tracking-[0.18em] text-[#5e8c96]">
+                    {asset.type}
+                  </p>
+                </div>
+                <div className="text-right text-sm text-[#c7e8e8]">
+                  <div className="font-semibold">${asset.value.toLocaleString()}</div>
+                  <div className="text-[#6faab0]">{asset.apy}% APY</div>
+                </div>
+              </div>
+              <div className="flex items-center justify-between gap-2 rounded-3xl border border-white/10 bg-[#0d2329] px-4 py-3 text-sm text-[#a9d6d7]">
+                <span>P&L</span>
+                <span className="text-emerald-300">+${asset.pnl} ({asset.pnlPct}%)</span>
+              </div>
+            </div>
+          )}
+        />
       </div>
     </div>
   );

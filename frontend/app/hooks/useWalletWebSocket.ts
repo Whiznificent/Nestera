@@ -3,7 +3,15 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { env } from "../lib/env";
-import type { Balance } from "../context/WalletContext";
+import { useWebSocket } from "./useWebSocket";
+
+interface Balance {
+  asset_code: string;
+  balance: string;
+  asset_type: string;
+  asset_issuer?: string;
+  usd_value: number;
+}
 
 type WSMessage = {
   type: "balance_update";

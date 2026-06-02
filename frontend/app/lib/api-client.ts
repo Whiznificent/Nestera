@@ -1,4 +1,5 @@
 import { RateLimiter } from "./utils";
+import { captureApiError, addBreadcrumb } from "./monitoring";
 
 const globalRateLimiter = new RateLimiter({
   maxConcurrent: 5,
@@ -17,10 +18,21 @@ export async function apiRequest<T>(
   url: string,
   options?: RequestInit
 ): Promise<T> {
+  const method = options?.method ?? "GET";
+
+  addBreadcrumb({
+    message: `${method} ${url}`,
+    category: "api",
+    data: { url, method },
+    level: "info",
+  });
+
   const response = await rateLimitedFetch(url, options);
 
   if (!response.ok) {
-    throw new Error(`API request failed: ${response.status} ${response.statusText}`);
+    const error = new Error(`API request failed: ${response.status} ${response.statusText}`);
+    captureApiError(error, url, response.status, method);
+    throw error;
   }
 
   return response.json() as Promise<T>;

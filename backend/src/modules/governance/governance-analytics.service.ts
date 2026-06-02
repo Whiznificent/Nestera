@@ -11,8 +11,10 @@ import {
   ProposalAnalyticsDto,
   CategorySuccessRate,
 } from './dto/proposal-analytics.dto';
+import { TemplateUsageDto } from './dto/template-usage.dto';
 import { TopVoterDto } from './dto/top-voter.dto';
 import { GovernanceTrendDto, TrendDataPoint } from './dto/governance-trend.dto';
+import { getProposalTemplate as getProposalTemplateDefinition } from './proposal-templates';
 
 @Injectable()
 export class GovernanceAnalyticsService {
@@ -197,6 +199,49 @@ export class GovernanceAnalyticsService {
     });
 
     return { trends };
+  }
+
+  async getTemplateUsage(): Promise<TemplateUsageDto[]> {
+    const rawStats = await this.proposalRepo
+      .createQueryBuilder('proposal')
+      .select('proposal.templateId', 'templateId')
+      .addSelect('proposal.templateVersion', 'templateVersion')
+      .addSelect('COUNT(*)', 'proposalsCreated')
+      .addSelect(
+        `SUM(CASE WHEN proposal.status = '${ProposalStatus.PASSED}' THEN 1 ELSE 0 END)`,
+        'passedProposals',
+      )
+      .addSelect(
+        `SUM(CASE WHEN proposal.status = '${ProposalStatus.FAILED}' THEN 1 ELSE 0 END)`,
+        'failedProposals',
+      )
+      .where('proposal.templateId IS NOT NULL')
+      .groupBy('proposal.templateId')
+      .addGroupBy('proposal.templateVersion')
+      .getRawMany();
+
+    return rawStats.map((stat) => {
+      const template = getProposalTemplateDefinition(
+        stat.templateId,
+        stat.templateVersion,
+      );
+      const proposalsCreated = parseInt(stat.proposalsCreated || '0', 10);
+      const passedProposals = parseInt(stat.passedProposals || '0', 10);
+      const failedProposals = parseInt(stat.failedProposals || '0', 10);
+      const successRate = proposalsCreated > 0
+        ? Math.round((passedProposals / proposalsCreated) * 1000) / 10
+        : 0;
+
+      return {
+        templateId: stat.templateId,
+        templateVersion: stat.templateVersion,
+        templateName: template?.name ?? stat.templateId,
+        proposalsCreated,
+        passedProposals,
+        failedProposals,
+        successRate,
+      };
+    });
   }
 
   async exportData(): Promise<any> {

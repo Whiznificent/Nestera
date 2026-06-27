@@ -23,11 +23,11 @@ export function getPoolExtraOptions(
   return {
     max: configService.get<number>(
       'database.pool.max',
-      configService.get<number>('DATABASE_POOL_MAX', isProduction ? 30 : 10),
+      configService.get<number>('DATABASE_POOL_MAX', isProduction ? 50 : 10),
     ),
     min: configService.get<number>(
       'database.pool.min',
-      configService.get<number>('DATABASE_POOL_MIN', isProduction ? 5 : 2),
+      configService.get<number>('DATABASE_POOL_MIN', isProduction ? 10 : 2),
     ),
     idleTimeoutMillis: configService.get<number>(
       'database.pool.idleTimeout',
@@ -47,7 +47,8 @@ export function getPoolExtraOptions(
     ),
     allowExitOnIdle: configService.get<boolean>(
       'database.pool.allowExitOnIdle',
-      configService.get<string>('DATABASE_POOL_ALLOW_EXIT_ON_IDLE') === 'true',
+      configService.get<string>('DATABASE_POOL_ALLOW_EXIT_ON_IDLE') ===
+        'true' || false,
     ),
   };
 }

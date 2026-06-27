@@ -23,6 +23,10 @@ interface PgPool {
   idleCount: number;
   waitingCount: number;
   options: { max: number; min: number };
+  on(
+    event: 'acquire' | 'release' | 'error',
+    listener: (...args: any[]) => void,
+  ): this;
 }
 
 @Injectable()
@@ -45,6 +49,47 @@ export class ConnectionPoolService implements OnModuleInit, OnModuleDestroy {
 
   onModuleInit(): void {
     this.initializePoolMonitoring();
+    this.initializeLeakDetection();
+  }
+
+  private initializeLeakDetection(): void {
+    const pool = this.getPool();
+    if (!pool) {
+      this.logger.warn(
+        'Unable to initialize leak detection: pg pool not found on dataSource.driver',
+      );
+      return;
+    }
+
+    const leakTimeoutMs = this.configService.get<number>(
+      'database.pool.leakTimeout',
+      this.configService.get<number>('DATABASE_POOL_LEAK_TIMEOUT', 5000),
+    );
+
+    pool.on('acquire', (client: any) => {
+      client.__acquiredAt = Date.now();
+      client.__leakTimer = setTimeout(() => {
+        this.logger.error(
+          `Connection leak detected! Connection held for more than ${leakTimeoutMs}ms.`,
+        );
+        this.apmService.recordPoolAlert(
+          'connection_leak_confirmed',
+          1,
+          'critical',
+        );
+      }, leakTimeoutMs);
+    });
+
+    pool.on('release', (client: any) => {
+      if (client.__leakTimer) {
+        clearTimeout(client.__leakTimer);
+        client.__leakTimer = null;
+      }
+    });
+
+    pool.on('error', (err: any) => {
+      this.logger.error('Unexpected error on idle database client', err);
+    });
   }
 
   private initializePoolMonitoring(): void {
@@ -66,7 +111,8 @@ export class ConnectionPoolService implements OnModuleInit, OnModuleDestroy {
   }
 
   private getPool(): PgPool | null {
-    const pool = (this.dataSource.driver as { pool?: PgPool }).pool;
+    const driver = this.dataSource.driver as any;
+    const pool = driver.pool ?? driver.master;
     return pool ?? null;
   }
 

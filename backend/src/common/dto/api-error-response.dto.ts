@@ -23,7 +23,7 @@ export class ValidationErrorDto extends ApiErrorResponseDto {
     ],
     description: 'Validation errors',
   })
-  errors?: Array<{
+  declare errors?: Array<{
     field: string;
     value?: unknown;
     constraints: Record<string, string>;

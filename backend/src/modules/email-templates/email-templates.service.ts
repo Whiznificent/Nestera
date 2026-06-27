@@ -1,7 +1,12 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { EmailTemplate, EmailTemplateVersion, EmailAbTest, EmailAbVariant } from './email-template.entity';
+import {
+  EmailTemplate,
+  EmailTemplateVersion,
+  EmailAbTest,
+  EmailAbVariant,
+} from './email-template.entity';
 import { CreateTemplateDto } from './dto/create-template.dto';
 import { CreateVersionDto } from './dto/create-version.dto';
 import { CreateAbTestDto } from './dto/create-abtest.dto';
@@ -26,13 +31,16 @@ export class EmailTemplatesService {
   }
 
   async getTemplate(id: string) {
-    const t = await this.templatesRepo.findOne({ where: { id }, relations: ['versions'] });
+    const t = await this.templatesRepo.findOne({
+      where: { id },
+      relations: ['versions'],
+    });
     if (!t) throw new NotFoundException('Template not found');
     return t;
   }
 
   async updateTemplate(id: string, patch: Partial<CreateTemplateDto>) {
-    await this.templatesRepo.update(id, patch as any);
+    await this.templatesRepo.update(id, patch);
     return this.getTemplate(id);
   }
 
@@ -44,7 +52,11 @@ export class EmailTemplatesService {
     const template = await this.templatesRepo.findOneBy({ id: templateId });
     if (!template) throw new NotFoundException('Template not found');
 
-    const last = await this.versionsRepo.find({ where: { template: { id: templateId } }, order: { version: 'DESC' }, take: 1 });
+    const last = await this.versionsRepo.find({
+      where: { template: { id: templateId } },
+      order: { version: 'DESC' },
+      take: 1,
+    });
     const nextVersion = (last[0]?.version ?? 0) + 1;
 
     const v = this.versionsRepo.create({
@@ -79,12 +91,19 @@ export class EmailTemplatesService {
     const template = await this.templatesRepo.findOneBy({ id: dto.templateId });
     if (!template) throw new NotFoundException('Template not found');
 
-    const ab = this.abTestRepo.create({ name: dto.name, template } as any);
+    const ab = this.abTestRepo.create({
+      name: dto.name,
+      template,
+    });
     ab.variants = [];
     for (const v of dto.variants) {
-      const ver = await this.versionsRepo.findOneBy({ id: v.versionId as any });
+      const ver = await this.versionsRepo.findOneBy({ id: v.versionId });
       if (!ver) throw new NotFoundException('Version for variant not found');
-      const variant = this.variantRepo.create({ version: ver, weight: v.weight ?? 1, key: v.key } as any);
+      const variant = this.variantRepo.create({
+        version: ver,
+        weight: v.weight ?? 1,
+        key: v.key,
+      });
       ab.variants.push(variant);
     }
 
@@ -92,10 +111,16 @@ export class EmailTemplatesService {
   }
 
   async pickVariant(abTestId: string, seed?: number) {
-    const ab = await this.abTestRepo.findOne({ where: { id: abTestId }, relations: ['variants', 'variants.version'] });
+    const ab = await this.abTestRepo.findOne({
+      where: { id: abTestId },
+      relations: ['variants', 'variants.version'],
+    });
     if (!ab) throw new NotFoundException('AB test not found');
     const total = ab.variants.reduce((s, v) => s + (v.weight ?? 1), 0);
-    const rnd = typeof seed === 'number' ? (seed % total) : Math.floor(Math.random() * total);
+    const rnd =
+      typeof seed === 'number'
+        ? seed % total
+        : Math.floor(Math.random() * total);
     let acc = 0;
     for (const v of ab.variants) {
       acc += v.weight ?? 1;

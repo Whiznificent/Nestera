@@ -11,13 +11,13 @@ describe('GracefulShutdownService', () => {
     } as const;
 
     const schedulerRegistry = {
-      getCronJobs: jest.fn().mockReturnValue(
-        new Map([
-          ['heartbeat', { stop: jest.fn() }],
-        ]),
-      ),
+      getCronJobs: jest
+        .fn()
+        .mockReturnValue(new Map([['heartbeat', { stop: jest.fn() }]])),
       getIntervals: jest.fn().mockReturnValue(['metrics']),
-      getInterval: jest.fn().mockReturnValue(setInterval(() => undefined, 1_000)),
+      getInterval: jest
+        .fn()
+        .mockReturnValue(setInterval(() => undefined, 1_000)),
       deleteInterval: jest.fn(),
       getTimeouts: jest.fn().mockReturnValue(['reconnect']),
       getTimeout: jest.fn().mockReturnValue(setTimeout(() => undefined, 1_000)),
@@ -73,7 +73,7 @@ describe('GracefulShutdownService', () => {
 
     await service.beforeApplicationShutdown('SIGTERM');
 
-    const cronJobs = schedulerRegistry.getCronJobs() as Map<
+    const cronJobs = schedulerRegistry.getCronJobs() as unknown as Map<
       string,
       { stop: jest.Mock }
     >;

@@ -7,7 +7,7 @@ export class ApplicationException extends HttpException {
   constructor(
     public readonly errorCode: string,
     messageOrStatus?: string | number,
-    public readonly context?: Record<string, unknown>,
+    public readonly context: Record<string, unknown> = {},
   ) {
     const message =
       typeof messageOrStatus === 'string' ? messageOrStatus : errorCode;
@@ -23,9 +23,6 @@ export class ApplicationException extends HttpException {
    * Add contextual information (method chaining)
    */
   withContext(key: string, value: unknown): this {
-    if (!this.context) {
-      (this as any).context = {};
-    }
     this.context[key] = value;
     return this;
   }

@@ -22,7 +22,7 @@ export class StatisticsUtilsService {
     oldValue: number,
     newValue: number,
   ): 'up' | 'down' | 'stable' {
-    const threshold = 0.01; // 1% threshold
+    const threshold = 1; // 1% threshold
     const percentChange = this.calculatePercentageChange(oldValue, newValue);
 
     if (percentChange > threshold) return 'up';
@@ -98,10 +98,7 @@ export class StatisticsUtilsService {
   /**
    * Group array by key
    */
-  groupByKey<T>(
-    items: T[],
-    keyFn: (item: T) => string,
-  ): Record<string, T[]> {
+  groupByKey<T>(items: T[], keyFn: (item: T) => string): Record<string, T[]> {
     return items.reduce(
       (groups, item) => {
         const key = keyFn(item);
@@ -152,9 +149,7 @@ export class StatisticsUtilsService {
     yearsElapsed: number,
   ): number {
     if (startValue <= 0 || yearsElapsed === 0) return 0;
-    return (
-      (Math.pow(endValue / startValue, 1 / yearsElapsed) - 1) * 100
-    );
+    return (Math.pow(endValue / startValue, 1 / yearsElapsed) - 1) * 100;
   }
 
   /**
@@ -254,8 +249,7 @@ export class StatisticsUtilsService {
     const multiplier = 2 / (period + 1);
 
     // SMA for first period
-    let ema =
-      values.slice(0, period).reduce((a, b) => a + b, 0) / period;
+    let ema = values.slice(0, period).reduce((a, b) => a + b, 0) / period;
     result.push(ema);
 
     // EMA for remaining values

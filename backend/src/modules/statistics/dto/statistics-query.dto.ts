@@ -8,6 +8,7 @@ import {
   Min,
   Max,
 } from 'class-validator';
+import { Type } from 'class-transformer';
 
 export enum TimeRange {
   LAST_7_DAYS = '7d',
@@ -88,6 +89,7 @@ export class StatisticsQueryDto {
     default: 1,
     description: 'Page number for pagination',
   })
+  @Type(() => Number)
   @IsNumber()
   @Min(1)
   @IsOptional()
@@ -98,6 +100,7 @@ export class StatisticsQueryDto {
     default: 50,
     description: 'Items per page',
   })
+  @Type(() => Number)
   @IsNumber()
   @Min(1)
   @Max(500)

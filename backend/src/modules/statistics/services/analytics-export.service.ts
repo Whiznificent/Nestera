@@ -56,7 +56,10 @@ interface AnalyticsExportPayload {
 @Injectable()
 export class AnalyticsExportService {
   private readonly logger = new Logger(AnalyticsExportService.name);
-  private readonly exportDir = path.join(os.tmpdir(), ANALYTICS_EXPORT_FILE_DIR);
+  private readonly exportDir = path.join(
+    os.tmpdir(),
+    ANALYTICS_EXPORT_FILE_DIR,
+  );
 
   constructor(
     @InjectRepository(AnalyticsExportJob)
@@ -83,8 +86,10 @@ export class AnalyticsExportService {
     dto: AnalyticsExportJobRequestDto,
   ): Promise<AnalyticsExportJobResponseDto> {
     const normalizedDataType = this.normalizeDataType(dataType);
-    const normalizedFormat = this.normalizeFormat(dto.format ?? AnalyticsExportFormat.JSON);
-    const { fromDate, toDate } = this.resolveDateRange(dto);
+    const normalizedFormat = this.normalizeFormat(
+      dto.format ?? AnalyticsExportFormat.JSON,
+    );
+    const [fromDate, toDate] = this.resolveDateRange(dto);
 
     const job = this.exportJobRepository.create({
       userId,
@@ -142,7 +147,9 @@ export class AnalyticsExportService {
     userId: string,
     jobId: string,
   ): Promise<AnalyticsExportJobResponseDto> {
-    const job = await this.exportJobRepository.findOne({ where: { id: jobId } });
+    const job = await this.exportJobRepository.findOne({
+      where: { id: jobId },
+    });
     if (!job) {
       throw new NotFoundException('Export job not found');
     }
@@ -161,7 +168,9 @@ export class AnalyticsExportService {
     fileName: string;
     contentType: string;
   }> {
-    const job = await this.exportJobRepository.findOne({ where: { id: jobId } });
+    const job = await this.exportJobRepository.findOne({
+      where: { id: jobId },
+    });
     if (!job) {
       throw new NotFoundException('Export job not found');
     }
@@ -179,7 +188,8 @@ export class AnalyticsExportService {
 
     return {
       filePath: job.filePath,
-      fileName: job.fileName ?? this.buildFileName(job.dataType, job.format, job.id),
+      fileName:
+        job.fileName ?? this.buildFileName(job.dataType, job.format, job.id),
       contentType: this.getContentType(job.format),
     };
   }
@@ -197,7 +207,9 @@ export class AnalyticsExportService {
   }
 
   async processExportJob(jobId: string): Promise<void> {
-    const job = await this.exportJobRepository.findOne({ where: { id: jobId } });
+    const job = await this.exportJobRepository.findOne({
+      where: { id: jobId },
+    });
     if (!job) {
       throw new NotFoundException('Export job not found');
     }
@@ -229,7 +241,8 @@ export class AnalyticsExportService {
 
       this.logger.log(`Analytics export job ${job.id} completed`);
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unknown export error';
+      const message =
+        error instanceof Error ? error.message : 'Unknown export error';
       await this.exportJobRepository.update(job.id, {
         status: AnalyticsExportStatus.FAILED,
         errorMessage: message,
@@ -246,28 +259,40 @@ export class AnalyticsExportService {
     const [fromDate, toDate] = this.resolveDateRange(query);
     const sections: AnalyticsExportSection[] = [];
 
-    if (dataType === AnalyticsExportDataType.ALL || dataType === AnalyticsExportDataType.USERS) {
+    if (
+      dataType === AnalyticsExportDataType.ALL ||
+      dataType === AnalyticsExportDataType.USERS
+    ) {
       sections.push({
         name: 'users',
         rows: await this.fetchUserGrowthRows(query, fromDate, toDate),
       });
     }
 
-    if (dataType === AnalyticsExportDataType.ALL || dataType === AnalyticsExportDataType.TRANSACTIONS) {
+    if (
+      dataType === AnalyticsExportDataType.ALL ||
+      dataType === AnalyticsExportDataType.TRANSACTIONS
+    ) {
       sections.push({
         name: 'transactions',
         rows: await this.fetchTransactionRows(query, fromDate, toDate),
       });
     }
 
-    if (dataType === AnalyticsExportDataType.ALL || dataType === AnalyticsExportDataType.SAVINGS) {
+    if (
+      dataType === AnalyticsExportDataType.ALL ||
+      dataType === AnalyticsExportDataType.SAVINGS
+    ) {
       sections.push({
         name: 'savings',
         rows: await this.fetchSavingsRows(query, fromDate, toDate),
       });
     }
 
-    if (dataType === AnalyticsExportDataType.ALL || dataType === AnalyticsExportDataType.HEALTH) {
+    if (
+      dataType === AnalyticsExportDataType.ALL ||
+      dataType === AnalyticsExportDataType.HEALTH
+    ) {
       sections.push({
         name: 'health',
         rows: await this.fetchHealthRows(fromDate, toDate),
@@ -304,21 +329,23 @@ export class AnalyticsExportService {
       order: { date: 'ASC' },
     });
 
-    return metrics.map((metric) => this.serializeRow({
-      date: this.toDateOnly(metric.date),
-      metricPeriod: metric.metricPeriod,
-      totalUsers: metric.totalUsers,
-      newUsersCount: metric.newUsersCount,
-      activeUsers: metric.activeUsers,
-      inactiveUsers: metric.inactiveUsers,
-      churnedUsers: metric.churnedUsers,
-      retentionRate: metric.retentionRate,
-      churnRate: metric.churnRate,
-      growthRate: metric.growthRate,
-      usersByRegion: metric.usersByRegion ?? {},
-      usersByType: metric.usersByType ?? {},
-      usersBySegment: metric.usersBySegment ?? {},
-    }));
+    return metrics.map((metric) =>
+      this.serializeRow({
+        date: this.toDateOnly(metric.date),
+        metricPeriod: metric.metricPeriod,
+        totalUsers: metric.totalUsers,
+        newUsersCount: metric.newUsersCount,
+        activeUsers: metric.activeUsers,
+        inactiveUsers: metric.inactiveUsers,
+        churnedUsers: metric.churnedUsers,
+        retentionRate: metric.retentionRate,
+        churnRate: metric.churnRate,
+        growthRate: metric.growthRate,
+        usersByRegion: metric.usersByRegion ?? {},
+        usersByType: metric.usersByType ?? {},
+        usersBySegment: metric.usersBySegment ?? {},
+      }),
+    );
   }
 
   private async fetchTransactionRows(
@@ -334,25 +361,27 @@ export class AnalyticsExportService {
       order: { date: 'ASC' },
     });
 
-    return metrics.map((metric) => this.serializeRow({
-      date: this.toDateOnly(metric.date),
-      metricPeriod: metric.metricPeriod,
-      totalTransactions: metric.totalTransactions,
-      successfulTransactions: metric.successfulTransactions,
-      failedTransactions: metric.failedTransactions,
-      pendingTransactions: metric.pendingTransactions,
-      totalVolume: metric.totalVolume,
-      avgTransactionAmount: metric.avgTransactionAmount,
-      minTransactionAmount: metric.minTransactionAmount,
-      maxTransactionAmount: metric.maxTransactionAmount,
-      successRate: metric.successRate,
-      failureRate: metric.failureRate,
-      avgGasUsed: metric.avgGasUsed,
-      totalGasSpent: metric.totalGasSpent,
-      transactionsByType: metric.transactionsByType ?? {},
-      transactionsByStatus: metric.transactionsByStatus ?? {},
-      volumeByType: metric.volumeByType ?? {},
-    }));
+    return metrics.map((metric) =>
+      this.serializeRow({
+        date: this.toDateOnly(metric.date),
+        metricPeriod: metric.metricPeriod,
+        totalTransactions: metric.totalTransactions,
+        successfulTransactions: metric.successfulTransactions,
+        failedTransactions: metric.failedTransactions,
+        pendingTransactions: metric.pendingTransactions,
+        totalVolume: metric.totalVolume,
+        avgTransactionAmount: metric.avgTransactionAmount,
+        minTransactionAmount: metric.minTransactionAmount,
+        maxTransactionAmount: metric.maxTransactionAmount,
+        successRate: metric.successRate,
+        failureRate: metric.failureRate,
+        avgGasUsed: metric.avgGasUsed,
+        totalGasSpent: metric.totalGasSpent,
+        transactionsByType: metric.transactionsByType ?? {},
+        transactionsByStatus: metric.transactionsByStatus ?? {},
+        volumeByType: metric.volumeByType ?? {},
+      }),
+    );
   }
 
   private async fetchSavingsRows(
@@ -368,26 +397,28 @@ export class AnalyticsExportService {
       order: { date: 'ASC' },
     });
 
-    return metrics.map((metric) => this.serializeRow({
-      date: this.toDateOnly(metric.date),
-      metricPeriod: metric.metricPeriod,
-      totalAccounts: metric.totalAccounts,
-      activeAccounts: metric.activeAccounts,
-      newAccounts: metric.newAccounts,
-      closedAccounts: metric.closedAccounts,
-      totalValueLocked: metric.totalValueLocked,
-      inflow: metric.inflow,
-      outflow: metric.outflow,
-      avgApy: metric.avgApy,
-      minApy: metric.minApy,
-      maxApy: metric.maxApy,
-      totalInterestEarned: metric.totalInterestEarned,
-      accountGrowthRate: metric.accountGrowthRate,
-      tvlGrowthRate: metric.tvlGrowthRate,
-      accountsByProduct: metric.accountsByProduct ?? {},
-      tvlByProduct: metric.tvlByProduct ?? {},
-      apyByProduct: metric.apyByProduct ?? {},
-    }));
+    return metrics.map((metric) =>
+      this.serializeRow({
+        date: this.toDateOnly(metric.date),
+        metricPeriod: metric.metricPeriod,
+        totalAccounts: metric.totalAccounts,
+        activeAccounts: metric.activeAccounts,
+        newAccounts: metric.newAccounts,
+        closedAccounts: metric.closedAccounts,
+        totalValueLocked: metric.totalValueLocked,
+        inflow: metric.inflow,
+        outflow: metric.outflow,
+        avgApy: metric.avgApy,
+        minApy: metric.minApy,
+        maxApy: metric.maxApy,
+        totalInterestEarned: metric.totalInterestEarned,
+        accountGrowthRate: metric.accountGrowthRate,
+        tvlGrowthRate: metric.tvlGrowthRate,
+        accountsByProduct: metric.accountsByProduct ?? {},
+        tvlByProduct: metric.tvlByProduct ?? {},
+        apyByProduct: metric.apyByProduct ?? {},
+      }),
+    );
   }
 
   private async fetchHealthRows(
@@ -401,30 +432,32 @@ export class AnalyticsExportService {
       order: { timestamp: 'ASC' },
     });
 
-    return metrics.map((metric) => this.serializeRow({
-      timestamp: metric.timestamp.toISOString(),
-      healthScore: metric.healthScore,
-      apiUptime: metric.apiUptime,
-      blockchainUptime: metric.blockchainUptime,
-      totalRequests: metric.totalRequests,
-      successfulRequests: metric.successfulRequests,
-      failedRequests: metric.failedRequests,
-      avgResponseTime: metric.avgResponseTime,
-      p95ResponseTime: metric.p95ResponseTime,
-      p99ResponseTime: metric.p99ResponseTime,
-      memoryUsed: metric.memoryUsed,
-      memoryAvailable: metric.memoryAvailable,
-      memoryUsagePercent:
-        metric.memoryAvailable > 0
-          ? (metric.memoryUsed / metric.memoryAvailable) * 100
-          : 0,
-      cpuUsage: metric.cpuUsage,
-      databaseConnections: metric.databaseConnections,
-      cacheHitRate: metric.cacheHitRate,
-      diskUsage: metric.diskUsage,
-      serviceStatus: metric.serviceStatus ?? {},
-      alerts: metric.alerts ?? [],
-    }));
+    return metrics.map((metric) =>
+      this.serializeRow({
+        timestamp: metric.timestamp.toISOString(),
+        healthScore: metric.healthScore,
+        apiUptime: metric.apiUptime,
+        blockchainUptime: metric.blockchainUptime,
+        totalRequests: metric.totalRequests,
+        successfulRequests: metric.successfulRequests,
+        failedRequests: metric.failedRequests,
+        avgResponseTime: metric.avgResponseTime,
+        p95ResponseTime: metric.p95ResponseTime,
+        p99ResponseTime: metric.p99ResponseTime,
+        memoryUsed: metric.memoryUsed,
+        memoryAvailable: metric.memoryAvailable,
+        memoryUsagePercent:
+          metric.memoryAvailable > 0
+            ? (metric.memoryUsed / metric.memoryAvailable) * 100
+            : 0,
+        cpuUsage: metric.cpuUsage,
+        databaseConnections: metric.databaseConnections,
+        cacheHitRate: metric.cacheHitRate,
+        diskUsage: metric.diskUsage,
+        serviceStatus: metric.serviceStatus ?? {},
+        alerts: metric.alerts ?? [],
+      }),
+    );
   }
 
   private async fetchOverviewRows(
@@ -438,27 +471,29 @@ export class AnalyticsExportService {
       order: { timestamp: 'ASC' },
     });
 
-    return metrics.map((metric) => this.serializeRow({
-      timestamp: metric.timestamp.toISOString(),
-      metricType: metric.metricType,
-      totalUsers: metric.totalUsers,
-      activeUsers: metric.activeUsers,
-      newUsersCount: metric.newUsersCount,
-      totalTransactions: metric.totalTransactions,
-      failedTransactions: metric.failedTransactions,
-      totalTransactionVolume: metric.totalTransactionVolume,
-      avgTransactionAmount: metric.avgTransactionAmount,
-      totalSavingsAccounts: metric.totalSavingsAccounts,
-      activeSavingsAccounts: metric.activeSavingsAccounts,
-      totalValueLocked: metric.totalValueLocked,
-      avgApy: metric.avgApy,
-      totalMedicalClaims: metric.totalMedicalClaims,
-      approvedClaims: metric.approvedClaims,
-      totalClaimsAmount: metric.totalClaimsAmount,
-      activeDisputes: metric.activeDisputes,
-      systemHealthScore: metric.systemHealthScore,
-      additionalMetrics: metric.additionalMetrics ?? {},
-    }));
+    return metrics.map((metric) =>
+      this.serializeRow({
+        timestamp: metric.timestamp.toISOString(),
+        metricType: metric.metricType,
+        totalUsers: metric.totalUsers,
+        activeUsers: metric.activeUsers,
+        newUsersCount: metric.newUsersCount,
+        totalTransactions: metric.totalTransactions,
+        failedTransactions: metric.failedTransactions,
+        totalTransactionVolume: metric.totalTransactionVolume,
+        avgTransactionAmount: metric.avgTransactionAmount,
+        totalSavingsAccounts: metric.totalSavingsAccounts,
+        activeSavingsAccounts: metric.activeSavingsAccounts,
+        totalValueLocked: metric.totalValueLocked,
+        avgApy: metric.avgApy,
+        totalMedicalClaims: metric.totalMedicalClaims,
+        approvedClaims: metric.approvedClaims,
+        totalClaimsAmount: metric.totalClaimsAmount,
+        activeDisputes: metric.activeDisputes,
+        systemHealthScore: metric.systemHealthScore,
+        additionalMetrics: metric.additionalMetrics ?? {},
+      }),
+    );
   }
 
   private async renderArtifact(
@@ -466,7 +501,12 @@ export class AnalyticsExportService {
     format: AnalyticsExportFormat,
     fileKey: string,
   ): Promise<AnalyticsExportArtifactDto> {
-    const fileName = this.buildFileName(payload.dataType, format, fileKey, payload);
+    const fileName = this.buildFileName(
+      payload.dataType,
+      format,
+      fileKey,
+      payload,
+    );
 
     if (format === AnalyticsExportFormat.JSON) {
       const buffer = Buffer.from(JSON.stringify(payload, null, 2));
@@ -575,8 +615,10 @@ export class AnalyticsExportService {
   }
 
   private buildContentTypesXml(sheetCount: number): string {
-    const overrides = Array.from({ length: sheetCount }, (_, index) =>
-      `<Override PartName="/xl/worksheets/sheet${index + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`,
+    const overrides = Array.from(
+      { length: sheetCount },
+      (_, index) =>
+        `<Override PartName="/xl/worksheets/sheet${index + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`,
     ).join('');
 
     return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -611,8 +653,10 @@ export class AnalyticsExportService {
   }
 
   private buildWorkbookRelsXml(sheetCount: number): string {
-    const sheetRelationships = Array.from({ length: sheetCount }, (_, index) =>
-      `<Relationship Id="rId${index + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${index + 1}.xml"/>`,
+    const sheetRelationships = Array.from(
+      { length: sheetCount },
+      (_, index) =>
+        `<Relationship Id="rId${index + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${index + 1}.xml"/>`,
     ).join('');
 
     return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -658,12 +702,17 @@ export class AnalyticsExportService {
 
   private buildWorksheetXml(section: AnalyticsExportSection): string {
     const rows = section.rows.map((row) => this.flattenRow(row));
-    const headers = Array.from(new Set(rows.flatMap((row) => Object.keys(row))));
+    const headers = Array.from(
+      new Set(rows.flatMap((row) => Object.keys(row))),
+    );
     const allRows = [
-      headers.reduce((acc, header) => {
-        acc[header] = header;
-        return acc;
-      }, {} as Record<string, unknown>),
+      headers.reduce(
+        (acc, header) => {
+          acc[header] = header;
+          return acc;
+        },
+        {} as Record<string, unknown>,
+      ),
       ...rows,
     ];
 
@@ -747,10 +796,9 @@ export class AnalyticsExportService {
 
     if (value && typeof value === 'object') {
       return Object.fromEntries(
-        Object.entries(value as Record<string, unknown>).map(([key, nested]) => [
-          key,
-          this.serializeValue(nested),
-        ]),
+        Object.entries(value as Record<string, unknown>).map(
+          ([key, nested]) => [key, this.serializeValue(nested)],
+        ),
       );
     }
 
@@ -759,7 +807,8 @@ export class AnalyticsExportService {
 
   private resolveDateRange(query: StatisticsQueryDto): [Date, Date] {
     const hasExplicitBounds = Boolean(query.fromDate || query.toDate);
-    const wantsCustomRange = query.range === TimeRange.CUSTOM || hasExplicitBounds;
+    const wantsCustomRange =
+      query.range === TimeRange.CUSTOM || hasExplicitBounds;
 
     if (wantsCustomRange) {
       if (!query.fromDate || !query.toDate) {
@@ -807,7 +856,7 @@ export class AnalyticsExportService {
   }
 
   private toQuery(job: AnalyticsExportJob): StatisticsQueryDto {
-    const payload = (job.requestPayload ?? {}) as Record<string, unknown>;
+    const payload = job.requestPayload ?? {};
     const period =
       typeof payload.period === 'string' ? payload.period : 'daily';
 
@@ -858,9 +907,10 @@ export class AnalyticsExportService {
     fileKey: string,
     payload?: AnalyticsExportPayload,
   ): string {
-    const rangeLabel = payload?.fromDate && payload?.toDate
-      ? `${this.compactDate(payload.fromDate)}_${this.compactDate(payload.toDate)}`
-      : 'latest';
+    const rangeLabel =
+      payload?.fromDate && payload?.toDate
+        ? `${this.compactDate(payload.fromDate)}_${this.compactDate(payload.toDate)}`
+        : 'latest';
     const suffix = format === AnalyticsExportFormat.XLSX ? 'xlsx' : format;
     return `analytics_${dataType}_${rangeLabel}_${fileKey}.${suffix}`;
   }
@@ -881,7 +931,7 @@ export class AnalyticsExportService {
   }
 
   private sanitizeSheetName(name: string): string {
-    return name.replace(/[\\/*?:\[\]]/g, ' ').slice(0, 31) || 'Sheet';
+    return name.replace(/[\\/*?:[\]]/g, ' ').slice(0, 31) || 'Sheet';
   }
 
   private escapeXml(value: string): string {
@@ -909,7 +959,9 @@ export class AnalyticsExportService {
     return dateValue.toISOString().slice(0, 10);
   }
 
-  private toJobResponse(job: AnalyticsExportJob): AnalyticsExportJobResponseDto {
+  private toJobResponse(
+    job: AnalyticsExportJob,
+  ): AnalyticsExportJobResponseDto {
     return {
       requestId: job.id,
       status: job.status,

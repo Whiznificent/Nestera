@@ -20,7 +20,7 @@ import {
 import { SavingsService, SavingsGoalProgress } from './savings.service';
 import { SocialShareDto, UpdateGoalSharingDto } from './dto/goal-sharing.dto';
 
-interface SharedGoalResponse {
+export interface SharedGoalResponse {
   goal: {
     id: string;
     goalName: string;

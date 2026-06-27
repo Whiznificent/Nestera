@@ -121,10 +121,34 @@ export class MetricsService implements OnModuleInit {
       labels: [],
     });
 
+    this.registerGauge({
+      name: 'db_pool_waiting_connections',
+      help: 'Number of requests waiting for a database connection',
+      labels: [],
+    });
+
+    this.registerGauge({
+      name: 'db_pool_utilization_percent',
+      help: 'Database connection pool utilization percentage',
+      labels: [],
+    });
+
+    this.registerGauge({
+      name: 'db_pool_max_size',
+      help: 'Configured maximum database pool size',
+      labels: [],
+    });
+
     this.registerCounter({
       name: 'db_slow_queries_total',
       help: 'Total number of slow database queries exceeding threshold',
       labels: ['operation', 'entity'],
+    });
+
+    this.registerCounter({
+      name: 'db_pool_alerts_total',
+      help: 'Total number of database pool alerts fired',
+      labels: ['alert_type', 'severity'],
     });
 
     // Auth metrics
@@ -220,8 +244,7 @@ export class MetricsService implements OnModuleInit {
       if (metric.type === 'counter' || metric.type === 'gauge') {
         for (const [labels, value] of metric.values) {
           const labelStr = labels ? `{${labels}}` : '';
-          const metricValue = value as number;
-          lines.push(`${metric.name}${labelStr} ${metricValue}`);
+          lines.push(`${metric.name}${labelStr} ${String(value)}`);
         }
       } else if (metric.type === 'histogram') {
         for (const [labels, values] of metric.values) {

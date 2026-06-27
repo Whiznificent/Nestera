@@ -1,4 +1,4 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
   ProposalAttachment,
   ProposalStatus,
@@ -46,6 +46,7 @@ export class ProposalResponseDto {
   @ApiPropertyOptional({
     description: 'Template parameters used to generate the action payload',
     type: 'object',
+    additionalProperties: true,
   })
   templateParameters?: Record<string, unknown> | null;
 

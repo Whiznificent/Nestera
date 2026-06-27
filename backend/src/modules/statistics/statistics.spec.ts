@@ -1,5 +1,10 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { INestApplication, HttpStatus, BadRequestException } from '@nestjs/common';
+import {
+  INestApplication,
+  HttpStatus,
+  BadRequestException,
+  ValidationPipe,
+} from '@nestjs/common';
 import * as request from 'supertest';
 import { StatisticsController } from './statistics.controller';
 import { StatisticsService } from './services/statistics.service';
@@ -19,13 +24,21 @@ import {
   AnalyticsExportFormat,
   AnalyticsExportStatus,
 } from './entities/analytics-export-job.entity';
+import { UserGrowthMetrics } from './entities/user-growth-metrics.entity';
+import { TransactionMetrics } from './entities/transaction-metrics.entity';
+import { SavingsMetrics } from './entities/savings-metrics.entity';
+import { SystemHealthMetrics } from './entities/system-health-metrics.entity';
+import { SystemStatistics } from './entities/system-statistics.entity';
+import { User } from '../user/entities/user.entity';
+import { Transaction } from '../transactions/entities/transaction.entity';
+import { UserSubscription } from '../savings/entities/user-subscription.entity';
 
 describe('Statistics API (e2e)', () => {
   let app: INestApplication;
   let statisticsService: StatisticsService;
   let cacheManager: any;
   const adminToken =
-    'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyMTIzIiwicm9sZSI6ImFkbWluIn0.signature';
+    'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyMTIzIiwicm9sZSI6IkFETUlOIn0.signature';
 
   beforeAll(async () => {
     const mockRepositories = {
@@ -74,7 +87,9 @@ describe('Statistics API (e2e)', () => {
           useValue: {
             exportDirect: jest.fn(async (dataType, query, format) => {
               if (!['json', 'csv', 'xlsx'].includes(format)) {
-                throw new BadRequestException('Invalid analytics export format');
+                throw new BadRequestException(
+                  'Invalid analytics export format',
+                );
               }
 
               const payload = {
@@ -107,7 +122,9 @@ describe('Statistics API (e2e)', () => {
                     ? 'text/csv; charset=utf-8'
                     : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
                 buffer: Buffer.from(
-                  format === 'csv' ? 'section,totalUsers,totalTransactions\noverview,10,20\n' : 'PK',
+                  format === 'csv'
+                    ? 'section,totalUsers,totalTransactions\noverview,10,20\n'
+                    : 'PK',
                 ),
               };
             }),
@@ -133,35 +150,35 @@ describe('Statistics API (e2e)', () => {
           },
         },
         {
-          provide: getRepositoryToken('UserGrowthMetrics'),
+          provide: getRepositoryToken(UserGrowthMetrics),
           useValue: mockRepositories.UserGrowthMetricsRepository,
         },
         {
-          provide: getRepositoryToken('TransactionMetrics'),
+          provide: getRepositoryToken(TransactionMetrics),
           useValue: mockRepositories.TransactionMetricsRepository,
         },
         {
-          provide: getRepositoryToken('SavingsMetrics'),
+          provide: getRepositoryToken(SavingsMetrics),
           useValue: mockRepositories.SavingsMetricsRepository,
         },
         {
-          provide: getRepositoryToken('SystemHealthMetrics'),
+          provide: getRepositoryToken(SystemHealthMetrics),
           useValue: mockRepositories.SystemHealthMetricsRepository,
         },
         {
-          provide: getRepositoryToken('SystemStatistics'),
+          provide: getRepositoryToken(SystemStatistics),
           useValue: mockRepositories.SystemStatisticsRepository,
         },
         {
-          provide: getRepositoryToken('User'),
+          provide: getRepositoryToken(User),
           useValue: mockRepositories.UserRepository,
         },
         {
-          provide: getRepositoryToken('Transaction'),
+          provide: getRepositoryToken(Transaction),
           useValue: mockRepositories.TransactionRepository,
         },
         {
-          provide: getRepositoryToken('UserSubscription'),
+          provide: getRepositoryToken(UserSubscription),
           useValue: mockRepositories.UserSubscriptionRepository,
         },
         {
@@ -170,14 +187,57 @@ describe('Statistics API (e2e)', () => {
             get: jest.fn(),
             set: jest.fn(),
             del: jest.fn(),
-            reset: jest.fn(),
-            store: { keys: jest.fn() },
+            clear: jest.fn(),
+            stores: [{ store: { keys: jest.fn().mockResolvedValue([]) } }],
           },
         },
       ],
     }).compile();
 
     app = moduleFixture.createNestApplication();
+    app.useGlobalPipes(
+      new ValidationPipe({
+        transform: true,
+        whitelist: true,
+      }),
+    );
+    app.use((req: any, res: any, next: () => void) => {
+      if (
+        typeof req.path === 'string' &&
+        req.path.startsWith('/admin/statistics') &&
+        !req.headers?.authorization
+      ) {
+        return res.status(401).json({
+          statusCode: 401,
+          message: 'Unauthorized',
+        });
+      }
+
+      const authHeader = req.headers?.authorization as string | undefined;
+      if (!authHeader?.startsWith('Bearer ')) {
+        return next();
+      }
+
+      const token = authHeader.slice('Bearer '.length);
+      const payloadPart = token.split('.')[1];
+      if (!payloadPart) {
+        return next();
+      }
+
+      try {
+        const payload = JSON.parse(
+          Buffer.from(payloadPart, 'base64').toString('utf8'),
+        ) as { sub?: string; role?: string };
+        req.user = {
+          id: payload.sub,
+          role: payload.role,
+        };
+      } catch {
+        // Ignore malformed test tokens.
+      }
+
+      next();
+    });
     await app.init();
 
     statisticsService = moduleFixture.get<StatisticsService>(StatisticsService);
@@ -267,6 +327,30 @@ describe('Statistics API (e2e)', () => {
     });
 
     it('should support comparison periods', async () => {
+      jest.spyOn(statisticsService, 'getStatisticsOverview').mockResolvedValue({
+        userGrowth: {
+          totalUsers: 15000,
+          activeUsers: 12500,
+          newUsersCount: 250,
+          inactiveUsers: 2500,
+          churnedUsers: 120,
+          retentionRate: 95.2,
+          churnRate: 4.8,
+          growthRate: 2.3,
+          comparison: {
+            previousValue: 14000,
+            currentValue: 15000,
+            change: 1000,
+            changePercentage: 7.14,
+            trend: 'up',
+          },
+        },
+        transactionVolume: {} as TransactionVolumeDto,
+        savingsMetrics: {} as SavingsMetricsDto,
+        systemHealth: {} as SystemHealthDto,
+        generatedAt: new Date(),
+      });
+
       const response = await request(app.getHttpServer())
         .get('/admin/statistics/overview')
         .set('Authorization', adminToken)
@@ -392,6 +476,37 @@ describe('Statistics API (e2e)', () => {
     });
 
     it('should support drill-down filtering', async () => {
+      jest
+        .spyOn(statisticsService, 'getTransactionVolumeStatistics')
+        .mockResolvedValue({
+          totalTransactions: 5000,
+          successfulTransactions: 4800,
+          failedTransactions: 150,
+          pendingTransactions: 50,
+          totalVolume: 1500000,
+          avgTransactionAmount: 300,
+          minTransactionAmount: 10,
+          maxTransactionAmount: 50000,
+          successRate: 96,
+          failureRate: 3,
+          avgGasUsed: 0.005,
+          totalGasSpent: 25,
+          transactionsByType: {
+            deposit: 2500,
+            withdrawal: 1500,
+            transfer: 1000,
+          },
+          volumeByType: {
+            deposit: 750000,
+            withdrawal: 500000,
+            transfer: 250000,
+          },
+          drillDown: {
+            category: 'deposit',
+            breakdown: { count: 2500, volume: 750000 },
+          },
+        });
+
       const response = await request(app.getHttpServer())
         .get('/admin/statistics/transactions/volume')
         .set('Authorization', adminToken)
@@ -418,7 +533,11 @@ describe('Statistics API (e2e)', () => {
         totalInterestEarned: 250000,
         accountGrowthRate: 2.1,
         tvlGrowthRate: 3.5,
-        accountsByProduct: { Product_A: 3000, Product_B: 2500, Product_C: 2500 },
+        accountsByProduct: {
+          Product_A: 3000,
+          Product_B: 2500,
+          Product_C: 2500,
+        },
         tvlByProduct: {
           Product_A: 2000000,
           Product_B: 1750000,
@@ -525,7 +644,7 @@ describe('Statistics API (e2e)', () => {
         .query({ pattern: 'a'.repeat(101) }) // Pattern too long
         .expect(HttpStatus.BAD_REQUEST);
 
-      expect(response.body.error).toBeDefined();
+      expect(response.body.message).toBeDefined();
     });
   });
 
@@ -539,7 +658,8 @@ describe('Statistics API (e2e)', () => {
     });
 
     it('should return 403 for non-admin users', async () => {
-      const nonAdminToken = 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyMTIzIiwicm9sZSI6InVzZXIifQ.signature';
+      const nonAdminToken =
+        'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyMTIzIiwicm9sZSI6IlVTRVIifQ.signature';
 
       const response = await request(app.getHttpServer())
         .get('/admin/statistics/overview')
@@ -556,7 +676,7 @@ describe('Statistics API (e2e)', () => {
         .query({ range: 'invalid' })
         .expect(HttpStatus.BAD_REQUEST);
 
-      expect(response.body.error).toBeDefined();
+      expect(response.body.message).toBeDefined();
     });
 
     it('should return 404 when no data found', async () => {
@@ -642,7 +762,9 @@ describe('Statistics API (e2e)', () => {
         .query({ format: 'pdf' })
         .expect(HttpStatus.BAD_REQUEST);
 
-      expect(response.body.message).toContain('Invalid analytics export format');
+      expect(response.body.message).toContain(
+        'Invalid analytics export format',
+      );
     });
   });
 

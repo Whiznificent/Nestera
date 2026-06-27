@@ -1,4 +1,4 @@
-import { MigrationInterface, QueryRunner, Table, Index } from 'typeorm';
+import { MigrationInterface, QueryRunner, Table, TableIndex } from 'typeorm';
 
 export class CreateFeatureFlagsTable1775300000000 implements MigrationInterface {
   name = 'CreateFeatureFlagsTable1775300000000';
@@ -37,7 +37,7 @@ export class CreateFeatureFlagsTable1775300000000 implements MigrationInterface 
 
     await queryRunner.createIndex(
       'feature_flags',
-      new Index({ name: 'IDX_FEATURE_FLAGS_KEY', columnNames: ['key'] }),
+      new TableIndex({ name: 'IDX_FEATURE_FLAGS_KEY', columnNames: ['key'] }),
     );
   }
 

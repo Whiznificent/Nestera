@@ -1,9 +1,4 @@
-import {
-  Injectable,
-  Logger,
-  HttpException,
-  HttpStatus,
-} from '@nestjs/common';
+import { Injectable, Logger, HttpException, HttpStatus } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Between, MoreThanOrEqual, LessThanOrEqual } from 'typeorm';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
@@ -29,6 +24,10 @@ import { UserGrowthMetrics } from '../entities/user-growth-metrics.entity';
 import { TransactionMetrics } from '../entities/transaction-metrics.entity';
 import { SavingsMetrics } from '../entities/savings-metrics.entity';
 import { SystemHealthMetrics } from '../entities/system-health-metrics.entity';
+
+function optionalRecord<T>(value: T | null | undefined): T | undefined {
+  return value ?? undefined;
+}
 import { SystemStatistics } from '../entities/system-statistics.entity';
 import { StatisticsAggregationService } from './statistics-aggregation.service';
 
@@ -97,8 +96,8 @@ export class StatisticsService {
         retentionRate: latestMetric.retentionRate,
         churnRate: latestMetric.churnRate,
         growthRate: latestMetric.growthRate,
-        usersByRegion: latestMetric.usersByRegion,
-        usersBySegment: latestMetric.usersBySegment,
+        usersByRegion: optionalRecord(latestMetric.usersByRegion),
+        usersBySegment: optionalRecord(latestMetric.usersBySegment),
         timeSeries: metrics.map((m) => ({
           timestamp: m.date,
           value: m.newUsersCount,
@@ -133,9 +132,8 @@ export class StatisticsService {
   ): Promise<TransactionVolumeDto> {
     try {
       const cacheKey = this.generateCacheKey('transaction_volume', query);
-      const cached = await this.cacheManager.get<TransactionVolumeDto>(
-        cacheKey,
-      );
+      const cached =
+        await this.cacheManager.get<TransactionVolumeDto>(cacheKey);
 
       if (cached) {
         this.logger.debug(
@@ -179,8 +177,8 @@ export class StatisticsService {
         failureRate: aggregatedMetrics.failureRate,
         avgGasUsed: aggregatedMetrics.avgGasUsed,
         totalGasSpent: aggregatedMetrics.totalGasSpent,
-        transactionsByType: latestMetric.transactionsByType,
-        volumeByType: latestMetric.volumeByType,
+        transactionsByType: optionalRecord(latestMetric.transactionsByType),
+        volumeByType: optionalRecord(latestMetric.volumeByType),
         timeSeries: metrics.map((m) => ({
           timestamp: m.date,
           value: m.totalVolume,
@@ -266,9 +264,9 @@ export class StatisticsService {
         totalInterestEarned: latestMetric.totalInterestEarned,
         accountGrowthRate: latestMetric.accountGrowthRate,
         tvlGrowthRate: latestMetric.tvlGrowthRate,
-        accountsByProduct: latestMetric.accountsByProduct,
-        tvlByProduct: latestMetric.tvlByProduct,
-        apyByProduct: latestMetric.apyByProduct,
+        accountsByProduct: optionalRecord(latestMetric.accountsByProduct),
+        tvlByProduct: optionalRecord(latestMetric.tvlByProduct),
+        apyByProduct: optionalRecord(latestMetric.apyByProduct),
         timeSeries: metrics.map((m) => ({
           timestamp: m.date,
           value: m.totalValueLocked,
@@ -297,9 +295,7 @@ export class StatisticsService {
       await this.cacheManager.set(cacheKey, result, this.CACHE_TTL * 1000);
       return result;
     } catch (error) {
-      this.logger.error(
-        `Error fetching savings statistics: ${error.message}`,
-      );
+      this.logger.error(`Error fetching savings statistics: ${error.message}`);
       throw error;
     }
   }
@@ -315,7 +311,9 @@ export class StatisticsService {
       const cached = await this.cacheManager.get<SystemHealthDto>(cacheKey);
 
       if (cached) {
-        this.logger.debug(`Cache hit for system health statistics: ${cacheKey}`);
+        this.logger.debug(
+          `Cache hit for system health statistics: ${cacheKey}`,
+        );
         return cached;
       }
 
@@ -348,12 +346,13 @@ export class StatisticsService {
         avgResponseTime: latestMetric.avgResponseTime,
         p95ResponseTime: latestMetric.p95ResponseTime,
         p99ResponseTime: latestMetric.p99ResponseTime,
-        memoryUsage: (latestMetric.memoryUsed / latestMetric.memoryAvailable) * 100,
+        memoryUsage:
+          (latestMetric.memoryUsed / latestMetric.memoryAvailable) * 100,
         cpuUsage: latestMetric.cpuUsage,
         diskUsage: latestMetric.diskUsage,
         cacheHitRate: latestMetric.cacheHitRate,
-        serviceStatus: latestMetric.serviceStatus,
-        alerts: latestMetric.alerts,
+        serviceStatus: optionalRecord(latestMetric.serviceStatus),
+        alerts: optionalRecord(latestMetric.alerts),
       };
 
       await this.cacheManager.set(cacheKey, result, this.CACHE_TTL * 1000);
@@ -402,14 +401,18 @@ export class StatisticsService {
   async clearCache(pattern?: string): Promise<void> {
     try {
       if (pattern) {
-        const keys = await this.cacheManager.store.keys();
+        const keys: string[] = [];
+        for (const store of this.cacheManager.stores) {
+          const storeKeys = await store.store.keys();
+          keys.push(...storeKeys);
+        }
         const matchingKeys = keys.filter((key) => key.includes(pattern));
         await Promise.all(
           matchingKeys.map((key) => this.cacheManager.del(key)),
         );
         this.logger.log(`Cleared ${matchingKeys.length} cache entries`);
       } else {
-        await this.cacheManager.reset();
+        await this.cacheManager.clear();
         this.logger.log('Cleared all cache entries');
       }
     } catch (error) {
@@ -539,8 +542,8 @@ export class StatisticsService {
     }
 
     // Fetch previous period data based on metric type
-    let currentValue = 0;
-    let previousValue = 0;
+    const currentValue = 0;
+    const previousValue = 0;
 
     // This would be implemented based on the specific metric type
     // For now, return a basic comparison
@@ -577,9 +580,7 @@ export class StatisticsService {
     };
   }
 
-  private aggregateTransactionMetrics(
-    metrics: TransactionMetrics[],
-  ): {
+  private aggregateTransactionMetrics(metrics: TransactionMetrics[]): {
     totalTransactions: number;
     successfulTransactions: number;
     failedTransactions: number;
@@ -594,7 +595,10 @@ export class StatisticsService {
     totalGasSpent: number;
   } {
     return {
-      totalTransactions: metrics.reduce((sum, m) => sum + m.totalTransactions, 0),
+      totalTransactions: metrics.reduce(
+        (sum, m) => sum + m.totalTransactions,
+        0,
+      ),
       successfulTransactions: metrics.reduce(
         (sum, m) => sum + m.successfulTransactions,
         0,
@@ -618,11 +622,14 @@ export class StatisticsService {
         ...metrics.map((m) => m.maxTransactionAmount),
       ),
       successRate:
-        metrics.reduce((sum, m) => sum + m.successRate, 0) / (metrics.length || 1),
+        metrics.reduce((sum, m) => sum + m.successRate, 0) /
+        (metrics.length || 1),
       failureRate:
-        metrics.reduce((sum, m) => sum + m.failureRate, 0) / (metrics.length || 1),
+        metrics.reduce((sum, m) => sum + m.failureRate, 0) /
+        (metrics.length || 1),
       avgGasUsed:
-        metrics.reduce((sum, m) => sum + m.avgGasUsed, 0) / (metrics.length || 1),
+        metrics.reduce((sum, m) => sum + m.avgGasUsed, 0) /
+        (metrics.length || 1),
       totalGasSpent: metrics.reduce((sum, m) => sum + m.totalGasSpent, 0),
     };
   }

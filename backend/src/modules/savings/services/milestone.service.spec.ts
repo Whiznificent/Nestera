@@ -132,7 +132,7 @@ describe('MilestoneService', () => {
       );
 
       expect(result).toHaveLength(2); // 25% and 50% achieved
-      expect(eventEmitter.emit).toHaveBeenCalledTimes(2);
+      expect(eventEmitter.emit).toHaveBeenCalledTimes(4); // milestone.achieved + goal.milestone per milestone
       expect(eventEmitter.emit).toHaveBeenCalledWith(
         'milestone.achieved',
         expect.objectContaining({ percentage: 25 }),

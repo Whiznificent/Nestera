@@ -1,4 +1,5 @@
-import { Injectable, Logger, NotFoundException, OnEvent } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { OnEvent } from '@nestjs/event-emitter';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { EventEmitter2 } from '@nestjs/event-emitter';
@@ -353,7 +354,7 @@ export class BadgesService {
       points: badge.points,
       earnedAt: saved.earnedAt,
       metadata,
-    } as BadgeEarnedEvent);
+    });
 
     this.logger.log(
       `Awarded badge ${badge.code} to user ${userId} (${badge.points} points)`,
@@ -401,7 +402,19 @@ export class BadgesService {
     ).map((ub) => ub.badgeId);
 
     return allBadges.map((badge) => ({
-      ...badge,
+      id: badge.id,
+      code: badge.code,
+      name: badge.name,
+      description: badge.description,
+      category: badge.category,
+      tier: badge.tier,
+      icon: badge.icon,
+      color: badge.color,
+      points: badge.points,
+      active: badge.active,
+      criteria: badge.criteria ?? undefined,
+      createdAt: badge.createdAt,
+      updatedAt: badge.updatedAt,
       earned: userBadgeIds.includes(badge.id),
     }));
   }
@@ -513,14 +526,14 @@ export class BadgesService {
         color: userBadge.badge.color,
         points: userBadge.badge.points,
         active: userBadge.badge.active,
-        criteria: userBadge.badge.criteria,
+        criteria: userBadge.badge.criteria ?? undefined,
       },
       earnedAt: userBadge.earnedAt,
-      progress: userBadge.progress,
+      progress: userBadge.progress ?? undefined,
       shared: userBadge.shared,
-      sharedAt: userBadge.sharedAt,
-      shareToken: userBadge.shareToken,
-      metadata: userBadge.metadata,
+      sharedAt: userBadge.sharedAt ?? undefined,
+      shareToken: userBadge.shareToken ?? undefined,
+      metadata: userBadge.metadata ?? undefined,
     };
   }
 

@@ -80,7 +80,11 @@ export class StatisticsController {
   @ApiQuery({
     name: 'compareWith',
     required: false,
-    enum: ['previous_period', 'same_period_last_year', 'same_period_last_month'],
+    enum: [
+      'previous_period',
+      'same_period_last_year',
+      'same_period_last_month',
+    ],
     description: 'Compare with a previous period',
   })
   @ApiQuery({
@@ -101,7 +105,10 @@ export class StatisticsController {
     type: StatisticsOverviewDto,
   })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  @ApiResponse({ status: 403, description: 'Forbidden - Admin access required' })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - Admin access required',
+  })
   async getOverview(
     @Query() query: StatisticsQueryDto,
   ): Promise<StatisticsOverviewDto> {
@@ -131,7 +138,11 @@ export class StatisticsController {
   @ApiQuery({
     name: 'compareWith',
     required: false,
-    enum: ['previous_period', 'same_period_last_year', 'same_period_last_month'],
+    enum: [
+      'previous_period',
+      'same_period_last_year',
+      'same_period_last_month',
+    ],
     description: 'Compare with a previous period',
   })
   @ApiQuery({
@@ -152,7 +163,10 @@ export class StatisticsController {
     type: UserGrowthDto,
   })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  @ApiResponse({ status: 403, description: 'Forbidden - Admin access required' })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - Admin access required',
+  })
   @ApiResponse({ status: 404, description: 'No data found for the period' })
   async getUserGrowth(
     @Query() query: StatisticsQueryDto,
@@ -183,7 +197,11 @@ export class StatisticsController {
   @ApiQuery({
     name: 'compareWith',
     required: false,
-    enum: ['previous_period', 'same_period_last_year', 'same_period_last_month'],
+    enum: [
+      'previous_period',
+      'same_period_last_year',
+      'same_period_last_month',
+    ],
     description: 'Compare with a previous period',
   })
   @ApiQuery({
@@ -210,7 +228,10 @@ export class StatisticsController {
     type: TransactionVolumeDto,
   })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  @ApiResponse({ status: 403, description: 'Forbidden - Admin access required' })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - Admin access required',
+  })
   @ApiResponse({ status: 404, description: 'No data found for the period' })
   async getTransactionVolume(
     @Query() query: StatisticsQueryDto,
@@ -241,7 +262,11 @@ export class StatisticsController {
   @ApiQuery({
     name: 'compareWith',
     required: false,
-    enum: ['previous_period', 'same_period_last_year', 'same_period_last_month'],
+    enum: [
+      'previous_period',
+      'same_period_last_year',
+      'same_period_last_month',
+    ],
     description: 'Compare with a previous period',
   })
   @ApiQuery({
@@ -268,7 +293,10 @@ export class StatisticsController {
     type: SavingsMetricsDto,
   })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  @ApiResponse({ status: 403, description: 'Forbidden - Admin access required' })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - Admin access required',
+  })
   @ApiResponse({ status: 404, description: 'No data found for the period' })
   async getSavingsMetrics(
     @Query() query: StatisticsQueryDto,
@@ -296,7 +324,10 @@ export class StatisticsController {
     type: SystemHealthDto,
   })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  @ApiResponse({ status: 403, description: 'Forbidden - Admin access required' })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - Admin access required',
+  })
   @ApiResponse({ status: 404, description: 'No data found for the period' })
   async getSystemHealth(
     @Query() query: StatisticsQueryDto,
@@ -320,7 +351,10 @@ export class StatisticsController {
   })
   @ApiResponse({ status: 204, description: 'Cache cleared successfully' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  @ApiResponse({ status: 403, description: 'Forbidden - Admin access required' })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - Admin access required',
+  })
   async clearCache(@Query('pattern') pattern?: string): Promise<void> {
     if (pattern && pattern.length > 100) {
       throw new BadRequestException('Pattern is too long');
@@ -335,11 +369,14 @@ export class StatisticsController {
   @ApiParam({ name: 'jobId', description: 'Export job UUID' })
   @ApiResponse({ status: 200, description: 'Export file download' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  @ApiResponse({ status: 403, description: 'Forbidden - Admin access required' })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - Admin access required',
+  })
   async downloadExportJob(
-    @CurrentUser() user?: { id?: string },
     @Param('jobId') jobId: string,
     @Res() res: Response,
+    @CurrentUser() user?: { id?: string },
   ): Promise<void> {
     const download = await this.analyticsExportService.getExportJobDownload(
       this.resolveExportUserId(user),
@@ -365,8 +402,8 @@ export class StatisticsController {
     type: AnalyticsExportJobResponseDto,
   })
   async getExportJobStatus(
-    @CurrentUser() user?: { id?: string },
     @Param('jobId') jobId: string,
+    @CurrentUser() user?: { id?: string },
   ): Promise<AnalyticsExportJobResponseDto> {
     return this.analyticsExportService.getExportJobStatus(
       this.resolveExportUserId(user),
@@ -391,9 +428,9 @@ export class StatisticsController {
     type: AnalyticsExportJobResponseDto,
   })
   async createExportJob(
-    @CurrentUser() user?: { id?: string },
     @Param('dataType') dataType: string,
     @Body() body: AnalyticsExportJobRequestDto,
+    @CurrentUser() user?: { id?: string },
   ): Promise<AnalyticsExportJobResponseDto> {
     return this.analyticsExportService.requestExportJob(
       this.resolveExportUserId(user),
@@ -431,7 +468,10 @@ export class StatisticsController {
   @ApiQuery({ name: 'toDate', required: false, type: String })
   @ApiResponse({ status: 200, description: 'Exported statistics data or file' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  @ApiResponse({ status: 403, description: 'Forbidden - Admin access required' })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - Admin access required',
+  })
   @ApiResponse({ status: 400, description: 'Invalid export format' })
   async exportStatistics(
     @Param('dataType') dataType: string,
@@ -494,7 +534,10 @@ export class StatisticsController {
     },
   })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  @ApiResponse({ status: 403, description: 'Forbidden - Admin access required' })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - Admin access required',
+  })
   async getDrillDownData(
     @Param('metricType') metricType: string,
     @Param('category') category: string,

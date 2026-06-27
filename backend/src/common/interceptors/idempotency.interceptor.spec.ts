@@ -1,7 +1,12 @@
-import { ExecutionContext, CallHandler, ConflictException, BadRequestException } from '@nestjs/common';
+import {
+  ExecutionContext,
+  CallHandler,
+  ConflictException,
+  BadRequestException,
+} from '@nestjs/common';
 import { IdempotencyInterceptor } from './idempotency.interceptor';
 import { IdempotencyService } from '../services/idempotency.service';
-import { of, throwError } from 'rxjs';
+import { of, throwError, firstValueFrom } from 'rxjs';
 
 describe('IdempotencyInterceptor', () => {
   let interceptor: IdempotencyInterceptor;
@@ -19,15 +24,20 @@ describe('IdempotencyInterceptor', () => {
     interceptor = new IdempotencyInterceptor(idempotencyService);
   });
 
-  const createMockContext = (method: string, headers: any, user: any = { id: 'user1' }): ExecutionContext => ({
-    switchToHttp: () => ({
-      getRequest: () => ({
-        method,
-        headers,
-        user,
+  const createMockContext = (
+    method: string,
+    headers: any,
+    user: any = { id: 'user1' },
+  ): ExecutionContext =>
+    ({
+      switchToHttp: () => ({
+        getRequest: () => ({
+          method,
+          headers,
+          user,
+        }),
       }),
-    }),
-  } as any);
+    }) as any;
 
   const mockCallHandler: CallHandler = {
     handle: () => of({ success: true }),
@@ -53,17 +63,20 @@ describe('IdempotencyInterceptor', () => {
     expect(idempotencyService.getResponse).not.toHaveBeenCalled();
   });
 
-  it('should return cached response if key exists', async (done) => {
+  it('should return cached response if key exists', (done) => {
     const context = createMockContext('POST', { 'x-idempotency-key': 'key1' });
     const cachedResponse = { success: true, fromCache: true };
     idempotencyService.getResponse.mockResolvedValue(cachedResponse);
 
-    const result$ = await interceptor.intercept(context, mockCallHandler);
-    
-    result$.subscribe(response => {
-      expect(response).toEqual(cachedResponse);
-      expect(idempotencyService.getResponse).toHaveBeenCalledWith('key1', 'user1');
-      done();
+    interceptor.intercept(context, mockCallHandler).then((result$) => {
+      result$.subscribe((response) => {
+        expect(response).toEqual(cachedResponse);
+        expect(idempotencyService.getResponse).toHaveBeenCalledWith(
+          'key1',
+          'user1',
+        );
+        done();
+      });
     });
   });
 
@@ -72,41 +85,52 @@ describe('IdempotencyInterceptor', () => {
     idempotencyService.getResponse.mockResolvedValue(null);
     idempotencyService.isProcessing.mockResolvedValue(true);
 
-    await expect(interceptor.intercept(context, mockCallHandler)).rejects.toThrow(ConflictException);
+    await expect(
+      interceptor.intercept(context, mockCallHandler),
+    ).rejects.toThrow(ConflictException);
   });
 
-  it('should process request and cache response if key is new', async (done) => {
+  it('should process request and cache response if key is new', async () => {
     const context = createMockContext('POST', { 'x-idempotency-key': 'key1' });
     idempotencyService.getResponse.mockResolvedValue(null);
     idempotencyService.isProcessing.mockResolvedValue(false);
 
-    const result$ = await interceptor.intercept(context, mockCallHandler);
+    await firstValueFrom(await interceptor.intercept(context, mockCallHandler));
+    await Promise.resolve();
 
-    result$.subscribe(() => {
-      expect(idempotencyService.setProcessing).toHaveBeenCalledWith('key1', 'user1');
-      expect(idempotencyService.saveResponse).toHaveBeenCalledWith('key1', 'user1', { success: true });
-      expect(idempotencyService.removeProcessing).toHaveBeenCalledWith('key1', 'user1');
-      done();
-    });
+    expect(idempotencyService.setProcessing).toHaveBeenCalledWith(
+      'key1',
+      'user1',
+    );
+    expect(idempotencyService.saveResponse).toHaveBeenCalledWith(
+      'key1',
+      'user1',
+      { success: true },
+    );
+    expect(idempotencyService.removeProcessing).toHaveBeenCalledWith(
+      'key1',
+      'user1',
+    );
   });
 
-  it('should remove processing lock even if request fails', async (done) => {
+  it('should remove processing lock even if request fails', async () => {
     const context = createMockContext('POST', { 'x-idempotency-key': 'key1' });
     idempotencyService.getResponse.mockResolvedValue(null);
     idempotencyService.isProcessing.mockResolvedValue(false);
-    
+
     const failingHandler: CallHandler = {
       handle: () => throwError(() => new Error('API Error')),
     };
 
-    const result$ = await interceptor.intercept(context, failingHandler);
+    await expect(
+      firstValueFrom(await interceptor.intercept(context, failingHandler)),
+    ).rejects.toThrow('API Error');
+    await Promise.resolve();
 
-    result$.subscribe({
-      error: () => {
-        expect(idempotencyService.removeProcessing).toHaveBeenCalledWith('key1', 'user1');
-        expect(idempotencyService.saveResponse).not.toHaveBeenCalled();
-        done();
-      }
-    });
+    expect(idempotencyService.removeProcessing).toHaveBeenCalledWith(
+      'key1',
+      'user1',
+    );
+    expect(idempotencyService.saveResponse).not.toHaveBeenCalled();
   });
 });

@@ -90,7 +90,40 @@ export class ApmService implements OnModuleInit, OnModuleDestroy {
         name: 'high_db_pool_usage',
         metric: 'db_pool_active_connections',
         condition: 'gt',
-        threshold: 25,
+        threshold: parseInt(
+          this.configService.get<string>('DATABASE_POOL_ALERT_THRESHOLD') ||
+            String(
+              Math.floor(
+                (this.configService.get<number>('database.pool.max', 30) ||
+                  30) * 0.8,
+              ),
+            ),
+          10,
+        ),
+        windowMinutes: 1,
+        severity: 'warning',
+        enabled: true,
+      },
+      {
+        name: 'pool_exhaustion',
+        metric: 'db_pool_waiting_connections',
+        condition: 'gt',
+        threshold: this.configService.get<number>(
+          'database.pool.exhaustionWaitingThreshold',
+          0,
+        ),
+        windowMinutes: 1,
+        severity: 'critical',
+        enabled: true,
+      },
+      {
+        name: 'high_pool_utilization',
+        metric: 'db_pool_utilization_percent',
+        condition: 'gt',
+        threshold: this.configService.get<number>(
+          'database.pool.scaleUpThreshold',
+          80,
+        ),
         windowMinutes: 1,
         severity: 'warning',
         enabled: true,
@@ -286,9 +319,54 @@ export class ApmService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  updateDbPoolMetrics(active: number, idle: number): void {
+  updateDbPoolMetrics(
+    active: number,
+    idle: number,
+    waiting = 0,
+    utilizationPercent = 0,
+    maxSize = 0,
+  ): void {
     this.metricsService.setGauge('db_pool_active_connections', active);
     this.metricsService.setGauge('db_pool_idle_connections', idle);
+    this.metricsService.setGauge('db_pool_waiting_connections', waiting);
+    this.metricsService.setGauge(
+      'db_pool_utilization_percent',
+      utilizationPercent,
+    );
+    this.metricsService.setGauge('db_pool_max_size', maxSize);
+  }
+
+  recordPoolAlert(
+    alertType: string,
+    value: number,
+    severity: 'info' | 'warning' | 'critical',
+  ): void {
+    this.metricsService.incrementCounter('db_pool_alerts_total', {
+      alert_type: alertType,
+      severity,
+    });
+
+    const entry = {
+      rule: alertType,
+      value,
+      timestamp: new Date(),
+      severity,
+    };
+
+    this.alertHistory.push(entry);
+    if (this.alertHistory.length > 1000) this.alertHistory.shift();
+
+    const logMethod =
+      severity === 'critical'
+        ? this.logger.error.bind(this.logger)
+        : severity === 'warning'
+          ? this.logger.warn.bind(this.logger)
+          : this.logger.log.bind(this.logger);
+
+    logMethod(
+      `[POOL ALERT][${severity.toUpperCase()}] ${alertType}: value=${value}`,
+      entry,
+    );
   }
 
   trackTokenRefresh(status: 'success' | 'failure'): void {

@@ -1,4 +1,4 @@
-import { MigrationInterface, QueryRunner, Table, Index } from 'typeorm';
+import { MigrationInterface, QueryRunner, Table } from 'typeorm';
 
 export class CreateStatisticsEntities1800200000 implements MigrationInterface {
   public async up(queryRunner: QueryRunner): Promise<void> {
@@ -149,15 +149,15 @@ export class CreateStatisticsEntities1800200000 implements MigrationInterface {
           },
         ],
         indices: [
-          new Index({
+          {
             name: 'IDX_system_statistics_timestamp',
             columnNames: ['timestamp'],
             isUnique: true,
-          }),
-          new Index({
+          },
+          {
             name: 'IDX_system_statistics_metric_type',
             columnNames: ['metricType', 'timestamp'],
-          }),
+          },
         ],
       }),
     );
@@ -260,14 +260,14 @@ export class CreateStatisticsEntities1800200000 implements MigrationInterface {
           },
         ],
         indices: [
-          new Index({
+          {
             name: 'IDX_user_growth_metrics_date',
             columnNames: ['date'],
-          }),
-          new Index({
+          },
+          {
             name: 'IDX_user_growth_metrics_date_period',
             columnNames: ['date', 'metricPeriod'],
-          }),
+          },
         ],
       }),
     );
@@ -404,14 +404,14 @@ export class CreateStatisticsEntities1800200000 implements MigrationInterface {
           },
         ],
         indices: [
-          new Index({
+          {
             name: 'IDX_transaction_metrics_date',
             columnNames: ['date'],
-          }),
-          new Index({
+          },
+          {
             name: 'IDX_transaction_metrics_date_period',
             columnNames: ['date', 'metricPeriod'],
-          }),
+          },
         ],
       }),
     );
@@ -556,14 +556,14 @@ export class CreateStatisticsEntities1800200000 implements MigrationInterface {
           },
         ],
         indices: [
-          new Index({
+          {
             name: 'IDX_savings_metrics_date',
             columnNames: ['date'],
-          }),
-          new Index({
+          },
+          {
             name: 'IDX_savings_metrics_date_period',
             columnNames: ['date', 'metricPeriod'],
-          }),
+          },
         ],
       }),
     );
@@ -711,10 +711,10 @@ export class CreateStatisticsEntities1800200000 implements MigrationInterface {
           },
         ],
         indices: [
-          new Index({
+          {
             name: 'IDX_system_health_metrics_timestamp',
             columnNames: ['timestamp'],
-          }),
+          },
         ],
       }),
     );
@@ -722,15 +722,39 @@ export class CreateStatisticsEntities1800200000 implements MigrationInterface {
 
   public async down(queryRunner: QueryRunner): Promise<void> {
     // Drop indices
-    await queryRunner.dropIndex('system_statistics', 'IDX_system_statistics_timestamp');
-    await queryRunner.dropIndex('system_statistics', 'IDX_system_statistics_metric_type');
-    await queryRunner.dropIndex('user_growth_metrics', 'IDX_user_growth_metrics_date');
-    await queryRunner.dropIndex('user_growth_metrics', 'IDX_user_growth_metrics_date_period');
-    await queryRunner.dropIndex('transaction_metrics', 'IDX_transaction_metrics_date');
-    await queryRunner.dropIndex('transaction_metrics', 'IDX_transaction_metrics_date_period');
+    await queryRunner.dropIndex(
+      'system_statistics',
+      'IDX_system_statistics_timestamp',
+    );
+    await queryRunner.dropIndex(
+      'system_statistics',
+      'IDX_system_statistics_metric_type',
+    );
+    await queryRunner.dropIndex(
+      'user_growth_metrics',
+      'IDX_user_growth_metrics_date',
+    );
+    await queryRunner.dropIndex(
+      'user_growth_metrics',
+      'IDX_user_growth_metrics_date_period',
+    );
+    await queryRunner.dropIndex(
+      'transaction_metrics',
+      'IDX_transaction_metrics_date',
+    );
+    await queryRunner.dropIndex(
+      'transaction_metrics',
+      'IDX_transaction_metrics_date_period',
+    );
     await queryRunner.dropIndex('savings_metrics', 'IDX_savings_metrics_date');
-    await queryRunner.dropIndex('savings_metrics', 'IDX_savings_metrics_date_period');
-    await queryRunner.dropIndex('system_health_metrics', 'IDX_system_health_metrics_timestamp');
+    await queryRunner.dropIndex(
+      'savings_metrics',
+      'IDX_savings_metrics_date_period',
+    );
+    await queryRunner.dropIndex(
+      'system_health_metrics',
+      'IDX_system_health_metrics_timestamp',
+    );
 
     // Drop tables
     await queryRunner.dropTable('system_health_metrics');

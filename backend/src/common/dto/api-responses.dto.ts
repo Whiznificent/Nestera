@@ -20,34 +20,34 @@ export class ErrorResponseDto {
 
 export class UnauthorizedResponseDto extends ErrorResponseDto {
   @ApiProperty({ example: 401 })
-  statusCode: number;
+  declare statusCode: number;
 
   @ApiProperty({ example: 'Unauthorized' })
-  message: string;
+  declare message: string;
 }
 
 export class ForbiddenResponseDto extends ErrorResponseDto {
   @ApiProperty({ example: 403 })
-  statusCode: number;
+  declare statusCode: number;
 
   @ApiProperty({ example: 'Forbidden resource' })
-  message: string;
+  declare message: string;
 }
 
 export class NotFoundResponseDto extends ErrorResponseDto {
   @ApiProperty({ example: 404 })
-  statusCode: number;
+  declare statusCode: number;
 
   @ApiProperty({ example: 'Resource not found' })
-  message: string;
+  declare message: string;
 }
 
 export class ConflictResponseDto extends ErrorResponseDto {
   @ApiProperty({ example: 409 })
-  statusCode: number;
+  declare statusCode: number;
 
   @ApiProperty({ example: 'Resource already exists' })
-  message: string;
+  declare message: string;
 }
 
 export class TooManyRequestsResponseDto {
@@ -57,11 +57,15 @@ export class TooManyRequestsResponseDto {
   @ApiProperty({ example: 429 })
   statusCode: number;
 
-  @ApiProperty({ example: 'Rate limit exceeded for free tier. Maximum 60 requests per 60 seconds.' })
+  @ApiProperty({
+    example:
+      'Rate limit exceeded for free tier. Maximum 60 requests per 60 seconds.',
+  })
   message: string;
 
   @ApiProperty({
-    description: 'Seconds to wait before retrying (also returned in Retry-After header)',
+    description:
+      'Seconds to wait before retrying (also returned in Retry-After header)',
     example: 60,
   })
   retryAfter: number;
@@ -69,12 +73,13 @@ export class TooManyRequestsResponseDto {
 
 export class ValidationErrorResponseDto extends ErrorResponseDto {
   @ApiProperty({ example: 422 })
-  statusCode: number;
+  declare statusCode: number;
 
   @ApiProperty({
-    example: 'targetAmount must be a positive number; goalName should not be empty',
+    example:
+      'targetAmount must be a positive number; goalName should not be empty',
   })
-  message: string;
+  declare message: string;
 }
 
 /** Generic paginated wrapper. */

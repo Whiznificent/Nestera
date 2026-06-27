@@ -9,7 +9,7 @@ import {
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { BadgesService } from './badges.service';
 import { BadgeDto, UserBadgeDto, BadgeStatsDto } from './dto/badge.dto';
 

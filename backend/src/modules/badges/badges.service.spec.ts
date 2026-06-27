@@ -75,6 +75,11 @@ describe('BadgesService', () => {
     );
     userRepository = module.get<Repository<User>>(getRepositoryToken(User));
     eventEmitter = module.get<EventEmitter2>(EventEmitter2);
+
+    jest.spyOn(badgeRepository, 'save').mockResolvedValue(mockBadge as Badge);
+    jest
+      .spyOn(userBadgeRepository, 'save')
+      .mockResolvedValue(mockUserBadge as UserBadge);
   });
 
   it('should be defined', () => {
@@ -84,7 +89,9 @@ describe('BadgesService', () => {
   describe('initializeDefaultBadges', () => {
     it('should initialize default badges when none exist', async () => {
       jest.spyOn(badgeRepository, 'find').mockResolvedValue([]);
-      jest.spyOn(badgeRepository, 'save').mockResolvedValue([mockBadge as Badge]);
+      jest
+        .spyOn(badgeRepository, 'save')
+        .mockResolvedValue([mockBadge as Badge] as any);
 
       await service.initializeDefaultBadges();
 
@@ -93,7 +100,9 @@ describe('BadgesService', () => {
     });
 
     it('should skip initialization when badges already exist', async () => {
-      jest.spyOn(badgeRepository, 'find').mockResolvedValue([mockBadge as Badge]);
+      jest
+        .spyOn(badgeRepository, 'find')
+        .mockResolvedValue([mockBadge as Badge]);
 
       await service.initializeDefaultBadges();
 
@@ -104,23 +113,36 @@ describe('BadgesService', () => {
 
   describe('awardBadge', () => {
     it('should award a badge to a user', async () => {
-      jest.spyOn(badgeRepository, 'findOne').mockResolvedValue(mockBadge as Badge);
+      jest
+        .spyOn(badgeRepository, 'findOne')
+        .mockResolvedValue(mockBadge as Badge);
       jest.spyOn(userBadgeRepository, 'findOne').mockResolvedValue(null);
-      jest.spyOn(userBadgeRepository, 'create').mockReturnValue(mockUserBadge as UserBadge);
-      jest.spyOn(userBadgeRepository, 'save').mockResolvedValue(mockUserBadge as UserBadge);
+      jest
+        .spyOn(userBadgeRepository, 'create')
+        .mockReturnValue(mockUserBadge as UserBadge);
+      jest
+        .spyOn(userBadgeRepository, 'save')
+        .mockResolvedValue(mockUserBadge as UserBadge);
 
       const result = await service.awardBadge('user-1', 'badge-1');
 
       expect(result).toBeDefined();
-      expect(eventEmitter.emit).toHaveBeenCalledWith('badge.earned', expect.objectContaining({
-        userId: 'user-1',
-        badgeId: 'badge-1',
-      }));
+      expect(eventEmitter.emit).toHaveBeenCalledWith(
+        'badge.earned',
+        expect.objectContaining({
+          userId: 'user-1',
+          badgeId: 'badge-1',
+        }),
+      );
     });
 
     it('should not award duplicate badge', async () => {
-      jest.spyOn(badgeRepository, 'findOne').mockResolvedValue(mockBadge as Badge);
-      jest.spyOn(userBadgeRepository, 'findOne').mockResolvedValue(mockUserBadge as UserBadge);
+      jest
+        .spyOn(badgeRepository, 'findOne')
+        .mockResolvedValue(mockBadge as Badge);
+      jest
+        .spyOn(userBadgeRepository, 'findOne')
+        .mockResolvedValue(mockUserBadge as UserBadge);
 
       const result = await service.awardBadge('user-1', 'badge-1');
 
@@ -139,22 +161,35 @@ describe('BadgesService', () => {
 
   describe('checkMilestoneBadge', () => {
     it('should award milestone badge when percentage matches', async () => {
-      jest.spyOn(badgeRepository, 'findOne').mockResolvedValue(mockBadge as Badge);
+      jest
+        .spyOn(badgeRepository, 'findOne')
+        .mockResolvedValue(mockBadge as Badge);
       jest.spyOn(userBadgeRepository, 'findOne').mockResolvedValue(null);
-      jest.spyOn(service, 'awardBadge').mockResolvedValue(mockUserBadge as UserBadge);
+      jest
+        .spyOn(service, 'awardBadge')
+        .mockResolvedValue(mockUserBadge as UserBadge);
 
       await service.checkMilestoneBadge('user-1', 'goal-1', 25, 'Test Goal');
 
-      expect(service.awardBadge).toHaveBeenCalledWith('user-1', 'badge-1', expect.any(Object));
+      expect(service.awardBadge).toHaveBeenCalledWith(
+        'user-1',
+        'badge-1',
+        expect.any(Object),
+      );
     });
 
     it('should skip if badge already earned', async () => {
-      jest.spyOn(badgeRepository, 'findOne').mockResolvedValue(mockBadge as Badge);
-      jest.spyOn(userBadgeRepository, 'findOne').mockResolvedValue(mockUserBadge as UserBadge);
+      jest
+        .spyOn(badgeRepository, 'findOne')
+        .mockResolvedValue(mockBadge as Badge);
+      jest
+        .spyOn(userBadgeRepository, 'findOne')
+        .mockResolvedValue(mockUserBadge as UserBadge);
+      const awardBadgeSpy = jest.spyOn(service, 'awardBadge');
 
       await service.checkMilestoneBadge('user-1', 'goal-1', 25, 'Test Goal');
 
-      expect(service.awardBadge).not.toHaveBeenCalled();
+      expect(awardBadgeSpy).not.toHaveBeenCalled();
     });
   });
 
@@ -165,7 +200,9 @@ describe('BadgesService', () => {
         badge: mockBadge,
       };
 
-      jest.spyOn(userBadgeRepository, 'find').mockResolvedValue([userBadgesWithRelations as any]);
+      jest
+        .spyOn(userBadgeRepository, 'find')
+        .mockResolvedValue([userBadgesWithRelations as any]);
 
       const result = await service.getUserBadges('user-1');
 
@@ -181,7 +218,9 @@ describe('BadgesService', () => {
         badge: mockBadge,
       };
 
-      jest.spyOn(userBadgeRepository, 'find').mockResolvedValue([userBadgesWithRelations as any]);
+      jest
+        .spyOn(userBadgeRepository, 'find')
+        .mockResolvedValue([userBadgesWithRelations as any]);
       jest.spyOn(badgeRepository, 'count').mockResolvedValue(10);
 
       const result = await service.getBadgeStats('user-1');
@@ -201,8 +240,12 @@ describe('BadgesService', () => {
         shareToken: null,
       };
 
-      jest.spyOn(userBadgeRepository, 'findOne').mockResolvedValue(userBadgeWithRelations as any);
-      jest.spyOn(userBadgeRepository, 'save').mockResolvedValue(userBadgeWithRelations as any);
+      jest
+        .spyOn(userBadgeRepository, 'findOne')
+        .mockResolvedValue(userBadgeWithRelations as any);
+      jest
+        .spyOn(userBadgeRepository, 'save')
+        .mockResolvedValue(userBadgeWithRelations as any);
 
       const result = await service.generateShareToken('user-1', 'user-badge-1');
 
@@ -217,7 +260,9 @@ describe('BadgesService', () => {
         shareToken: 'existing-token',
       };
 
-      jest.spyOn(userBadgeRepository, 'findOne').mockResolvedValue(userBadgeWithRelations as any);
+      jest
+        .spyOn(userBadgeRepository, 'findOne')
+        .mockResolvedValue(userBadgeWithRelations as any);
 
       const result = await service.generateShareToken('user-1', 'user-badge-1');
 
@@ -235,7 +280,9 @@ describe('BadgesService', () => {
         shareToken: 'test-token',
       };
 
-      jest.spyOn(userBadgeRepository, 'findOne').mockResolvedValue(userBadgeWithRelations as any);
+      jest
+        .spyOn(userBadgeRepository, 'findOne')
+        .mockResolvedValue(userBadgeWithRelations as any);
 
       const result = await service.getSharedBadge('test-token');
 

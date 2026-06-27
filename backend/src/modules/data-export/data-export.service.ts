@@ -17,9 +17,15 @@ import {
   ExportStatus,
 } from './entities/data-export-request.entity';
 import { User } from '../user/entities/user.entity';
-import { Transaction } from '../transactions/entities/transaction.entity';
+import {
+  Transaction,
+  TxType,
+} from '../transactions/entities/transaction.entity';
 import { Notification } from '../notifications/entities/notification.entity';
-import { SavingsGoal } from '../savings/entities/savings-goal.entity';
+import {
+  SavingsGoal,
+  SavingsGoalStatus,
+} from '../savings/entities/savings-goal.entity';
 import { MailService } from '../mail/mail.service';
 
 const EXPORT_DIR = path.join(os.tmpdir(), 'nestera-exports');
@@ -124,9 +130,15 @@ export class DataExportService {
       order: { createdAt: 'DESC' },
       take: 50,
     });
-    return requests.map(({ id, status, createdAt, completedAt, expiresAt }) => ({
-      requestId: id, status, createdAt, completedAt, expiresAt,
-    }));
+    return requests.map(
+      ({ id, status, createdAt, completedAt, expiresAt }) => ({
+        requestId: id,
+        status,
+        createdAt,
+        completedAt,
+        expiresAt,
+      }),
+    );
   }
 
   /**
@@ -199,8 +211,11 @@ export class DataExportService {
     if (from) qb = qb.andWhere('tx.createdAt >= :from', { from });
     if (to) qb = qb.andWhere('tx.createdAt <= :to', { to });
     const rows = await qb.getMany();
-    return rows.map(({ id, type, amount, currency, status, createdAt }) => ({
-      id, type, amount, currency, status,
+    return rows.map(({ id, type, amount, status, createdAt }) => ({
+      id,
+      type,
+      amount,
+      status,
       date: createdAt?.toISOString().slice(0, 10) ?? '',
     }));
   }
@@ -212,8 +227,11 @@ export class DataExportService {
     const goals = await this.savingsGoalRepository.find({
       where: { userId },
     });
-    return goals.map(({ id, name, targetAmount, currentAmount, currency, status, createdAt }) => ({
-      id, name, targetAmount, currentAmount, currency, status,
+    return goals.map(({ id, goalName, targetAmount, status, createdAt }) => ({
+      id,
+      name: goalName,
+      targetAmount,
+      status,
       createdAt: createdAt?.toISOString().slice(0, 10) ?? '',
     }));
   }
@@ -227,17 +245,25 @@ export class DataExportService {
       this.savingsGoalRepository.find({ where: { userId } }),
     ]);
     const totalDeposited = transactions
-      .filter((t) => (t as Record<string, unknown>)['type'] === 'deposit')
-      .reduce((s, t) => s + Number((t as Record<string, unknown>)['amount'] ?? 0), 0);
+      .filter((t) => t.type === TxType.DEPOSIT)
+      .reduce((s, t) => s + Number(t.amount ?? 0), 0);
     const totalWithdrawn = transactions
-      .filter((t) => (t as Record<string, unknown>)['type'] === 'withdraw')
-      .reduce((s, t) => s + Number((t as Record<string, unknown>)['amount'] ?? 0), 0);
+      .filter((t) => t.type === TxType.WITHDRAW)
+      .reduce((s, t) => s + Number(t.amount ?? 0), 0);
     return [
       { metric: 'total_deposited', value: totalDeposited },
       { metric: 'total_withdrawn', value: totalWithdrawn },
       { metric: 'net_position', value: totalDeposited - totalWithdrawn },
-      { metric: 'active_goals', value: goals.filter((g) => (g as Record<string, unknown>)['status'] === 'active').length },
-      { metric: 'completed_goals', value: goals.filter((g) => (g as Record<string, unknown>)['status'] === 'completed').length },
+      {
+        metric: 'active_goals',
+        value: goals.filter((g) => g.status === SavingsGoalStatus.IN_PROGRESS)
+          .length,
+      },
+      {
+        metric: 'completed_goals',
+        value: goals.filter((g) => g.status === SavingsGoalStatus.COMPLETED)
+          .length,
+      },
     ];
   }
 
@@ -251,7 +277,12 @@ export class DataExportService {
   ): Promise<Record<string, unknown>[]> {
     let qb = this.transactionRepository
       .createQueryBuilder('tx')
-      .select(['tx.type AS type', 'DATE(tx.createdAt) AS date', 'COUNT(*) AS count', 'SUM(tx.amount) AS total'])
+      .select([
+        'tx.type AS type',
+        'DATE(tx.createdAt) AS date',
+        'COUNT(*) AS count',
+        'SUM(tx.amount) AS total',
+      ])
       .where('tx.userId = :userId', { userId })
       .groupBy('tx.type, DATE(tx.createdAt)')
       .orderBy('DATE(tx.createdAt)', 'ASC');

@@ -1,5 +1,4 @@
 import { NestFactory } from '@nestjs/core';
-import { ValidationPipe, VersioningType } from '@nestjs/common';
 import {
   INestApplication,
   ValidationPipe,
@@ -31,7 +30,7 @@ async function flushApplicationLogs(
   };
 
   if (typeof nestApp.flushLogs === 'function') {
-    await nestApp.flushLogs();
+    await Promise.resolve(nestApp.flushLogs());
     return;
   }
 
@@ -54,16 +53,15 @@ async function bootstrap() {
   app.use(
     compression({
       threshold: 1024,
-      brotli: { enabled: true },
     }),
   );
 
-   app.setGlobalPrefix('api');
-   app.enableVersioning({
-     type: VersioningType.URI,
-     defaultVersion: '1',
-   });
-   app.useGlobalFilters(new AllExceptionsFilter());
+  app.setGlobalPrefix('api');
+  app.enableVersioning({
+    type: VersioningType.URI,
+    defaultVersion: '1',
+  });
+  app.useGlobalFilters(new AllExceptionsFilter());
   app.setGlobalPrefix('api');
   app.enableVersioning({
     type: VersioningType.URI,
@@ -99,19 +97,25 @@ async function bootstrap() {
     }),
   );
 
-   // Swagger setup
-   const swaggerConfig = new DocumentBuilder()
-     .setTitle('Nestera API')
-     .setDescription('API documentation for the Nestera platform (URI versioned, e.g., /v1/)')
-     .setVersion('1.0')
-     .addBearerAuth()
-     .build();
+  // Swagger setup
+  const swaggerConfig = new DocumentBuilder()
+    .setTitle('Nestera API')
+    .setDescription(
+      'API documentation for the Nestera platform (URI versioned, e.g., /v1/)',
+    )
+    .setVersion('1.0')
+    .addBearerAuth()
+    .build();
   const document = SwaggerModule.createDocument(app, swaggerConfig);
   SwaggerModule.setup('api/docs', app, document);
 
   await app.listen(port || 3001);
-   console.log(`Application is running on: http://localhost:${port}/api (with URI versioning, e.g., /v1/)`);
-   console.log(`Swagger docs available at: http://localhost:${port}/api/docs (shows versioned endpoints)`);
+  console.log(
+    `Application is running on: http://localhost:${port}/api (with URI versioning, e.g., /v1/)`,
+  );
+  console.log(
+    `Swagger docs available at: http://localhost:${port}/api/docs (shows versioned endpoints)`,
+  );
   // ── Swagger / OpenAPI setup ───────────────────────────────────────────────
   const rateLimitDescription = `
 ## Authentication
@@ -212,9 +216,12 @@ The API supports URI-based versioning (\`/api/v1/...\` and \`/api/v2/...\`).
 
   // Redirect /api/docs → /api/v2/docs for convenience
   const expressApp = app.getHttpAdapter().getInstance();
-  expressApp.get('/api/docs', (_req: unknown, res: { redirect: (url: string) => void }) => {
-    res.redirect('/api/v2/docs');
-  });
+  expressApp.get(
+    '/api/docs',
+    (_req: unknown, res: { redirect: (url: string) => void }) => {
+      res.redirect('/api/v2/docs');
+    },
+  );
 
   await app.listen(port || 3001);
   const logger = app.get(Logger);

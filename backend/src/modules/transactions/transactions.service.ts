@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, SelectQueryBuilder, Brackets } from 'typeorm';
+import { Repository, SelectQueryBuilder, Brackets, IsNull } from 'typeorm';
 import { Readable } from 'stream';
 import { format as csvFormat } from '@fast-csv/format';
 import {
@@ -207,12 +207,15 @@ export class TransactionsService {
       return { ok: false, message: 'Saved search not found' };
     }
 
-    const queryDto = Object.assign(new TransactionQueryDto(), savedSearch.query, {
-      page: pagination?.page ?? 1,
-      limit: pagination?.limit ?? 10,
-      order:
-        (savedSearch.query.order as Order | undefined) ?? Order.DESC,
-    });
+    const queryDto = Object.assign(
+      new TransactionQueryDto(),
+      savedSearch.query,
+      {
+        page: pagination?.page ?? 1,
+        limit: pagination?.limit ?? 10,
+        order: (savedSearch.query.order as Order | undefined) ?? Order.DESC,
+      },
+    );
 
     return this.findAllForUser(userId, queryDto);
   }
@@ -315,9 +318,12 @@ export class TransactionsService {
             .orWhere('CAST(transaction.amount AS TEXT) ILIKE :searchLike', {
               searchLike,
             })
-            .orWhere('COALESCE(transaction.metadata::text, \'\') ILIKE :searchLike', {
-              searchLike,
-            })
+            .orWhere(
+              "COALESCE(transaction.metadata::text, '') ILIKE :searchLike",
+              {
+                searchLike,
+              },
+            )
             .orWhere(
               `array_to_string(transaction.tags, ' ') ILIKE :searchLike`,
               { searchLike },
@@ -472,7 +478,9 @@ export class TransactionsService {
     const categorization = this.autoCategorizationService.categorize(tx);
     if (categorization) {
       tx.category = categorization.category;
-      tx.tags = Array.from(new Set([...(tx.tags ?? []), ...categorization.tags]));
+      tx.tags = Array.from(
+        new Set([...(tx.tags ?? []), ...categorization.tags]),
+      );
       await this.transactionRepository.save(tx);
     }
 
@@ -482,7 +490,7 @@ export class TransactionsService {
   async autoCategorizeAll(userId: string) {
     const txs = await this.transactionRepository.findBy({
       userId,
-      category: null,
+      category: IsNull(),
     });
 
     let updated = 0;
@@ -552,7 +560,7 @@ export class TransactionsService {
       userId: savedSearch.userId,
       name: savedSearch.name,
       description: savedSearch.description,
-      query: savedSearch.query as TransactionSearchCriteriaDto,
+      query: savedSearch.query,
       isDefault: savedSearch.isDefault,
       createdAt: savedSearch.createdAt.toISOString(),
       updatedAt: savedSearch.updatedAt.toISOString(),

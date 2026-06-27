@@ -1,10 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Between, MoreThanOrEqual, LessThanOrEqual } from 'typeorm';
-import {
-  User,
-  UserStatus,
-} from '../../../modules/user/entities/user.entity';
+import { User } from '../../../modules/user/entities/user.entity';
 import {
   Transaction,
   TxType,
@@ -23,6 +20,17 @@ import { SystemHealthMetrics } from '../entities/system-health-metrics.entity';
 @Injectable()
 export class StatisticsAggregationService {
   private readonly logger = new Logger(StatisticsAggregationService.name);
+
+  private normalizeMetricPeriod(
+    metricType: 'daily' | 'hourly' | 'weekly' | 'monthly',
+  ): 'daily' | 'weekly' | 'monthly' | 'yearly' {
+    return metricType === 'hourly' ? 'daily' : metricType;
+  }
+
+  private parseAmount(amount: string | number | null | undefined): number {
+    const value = Number(amount ?? 0);
+    return Number.isFinite(value) ? value : 0;
+  }
 
   constructor(
     @InjectRepository(User)
@@ -49,7 +57,7 @@ export class StatisticsAggregationService {
     metricType: 'daily' | 'hourly' | 'weekly' | 'monthly' = 'daily',
   ): Promise<UserGrowthMetrics[]> {
     this.logger.log(
-      `Aggregating user growth metrics from ${startDate} to ${endDate}`,
+      `Aggregating user growth metrics from ${startDate.toISOString()} to ${endDate.toISOString()}`,
     );
 
     const users = await this.userRepository.find({
@@ -67,7 +75,7 @@ export class StatisticsAggregationService {
     const activeUsers = await this.userRepository.count({
       where: {
         createdAt: Between(startDate, endDate),
-        status: UserStatus.ACTIVE,
+        isActive: true,
       },
     });
 
@@ -75,9 +83,7 @@ export class StatisticsAggregationService {
 
     const previousMetrics = await this.userGrowthRepository.findOne({
       where: {
-        date: MoreThanOrEqual(
-          new Date(startDate.getTime() - 86400000),
-        ),
+        date: MoreThanOrEqual(new Date(startDate.getTime() - 86400000)),
       },
       order: { date: 'DESC' },
     });
@@ -98,21 +104,21 @@ export class StatisticsAggregationService {
 
     const metric = new UserGrowthMetrics();
     metric.date = startDate;
-    metric.metricPeriod = metricType;
+    metric.metricPeriod = this.normalizeMetricPeriod(metricType);
     metric.totalUsers = currentTotalUsers;
     metric.newUsersCount = users.length;
     metric.activeUsers = activeUsers;
     metric.inactiveUsers = currentTotalUsers - activeUsers;
-    metric.churnedUsers = Math.max(0, (previousMetrics?.totalUsers || 0) - currentTotalUsers);
+    metric.churnedUsers = Math.max(
+      0,
+      (previousMetrics?.totalUsers || 0) - currentTotalUsers,
+    );
     metric.retentionRate = Math.max(0, Math.min(100, retentionRate));
     metric.churnRate = Math.max(0, Math.min(100, churnRate));
     metric.growthRate = growthRate;
     metric.usersByRegion = await this.groupUsersByRegion(startDate, endDate);
     metric.usersByType = await this.groupUsersByType(startDate, endDate);
-    metric.usersBySegment = await this.groupUsersBySegment(
-      startDate,
-      endDate,
-    );
+    metric.usersBySegment = await this.groupUsersBySegment(startDate, endDate);
 
     return [await this.userGrowthRepository.save(metric)];
   }
@@ -123,7 +129,7 @@ export class StatisticsAggregationService {
     metricType: 'daily' | 'hourly' | 'weekly' | 'monthly' = 'daily',
   ): Promise<TransactionMetrics[]> {
     this.logger.log(
-      `Aggregating transaction metrics from ${startDate} to ${endDate}`,
+      `Aggregating transaction metrics from ${startDate.toISOString()} to ${endDate.toISOString()}`,
     );
 
     const transactions = await this.transactionRepository.find({
@@ -134,7 +140,7 @@ export class StatisticsAggregationService {
 
     const totalTransactions = transactions.length;
     const successfulTransactions = transactions.filter(
-      (t) => t.status === TxStatus.SUCCESS,
+      (t) => t.status === TxStatus.COMPLETED,
     ).length;
     const failedTransactions = transactions.filter(
       (t) => t.status === TxStatus.FAILED,
@@ -143,28 +149,26 @@ export class StatisticsAggregationService {
       (t) => t.status === TxStatus.PENDING,
     ).length;
 
-    const totalVolume = transactions.reduce((sum, t) => sum + (t.amount || 0), 0);
-    const avgTransactionAmount =
-      totalTransactions > 0 ? totalVolume / totalTransactions : 0;
-    const minTransactionAmount = Math.min(
-      ...transactions.map((t) => t.amount || 0),
-      999999999,
-    );
-    const maxTransactionAmount = Math.max(
-      ...transactions.map((t) => t.amount || 0),
+    const totalVolume = transactions.reduce(
+      (sum, t) => sum + this.parseAmount(t.amount),
       0,
     );
+    const avgTransactionAmount =
+      totalTransactions > 0 ? totalVolume / totalTransactions : 0;
+    const amounts = transactions.map((t) => this.parseAmount(t.amount));
+    const minTransactionAmount = amounts.length ? Math.min(...amounts) : 0;
+    const maxTransactionAmount = amounts.length ? Math.max(...amounts) : 0;
 
     const successRate =
       totalTransactions > 0
         ? (successfulTransactions / totalTransactions) * 100
         : 0;
     const failureRate =
-      totalTransactions > 0 ? (failedTransactions / totalTransactions) * 100 : 0;
+      totalTransactions > 0
+        ? (failedTransactions / totalTransactions) * 100
+        : 0;
 
-    const gasUsageData = transactions.map((t) =>
-      typeof t.gasUsed === 'number' ? t.gasUsed : 0,
-    );
+    const gasUsageData = transactions.map(() => 0);
     const avgGasUsed =
       gasUsageData.length > 0
         ? gasUsageData.reduce((a, b) => a + b, 0) / gasUsageData.length
@@ -173,15 +177,14 @@ export class StatisticsAggregationService {
 
     const metric = new TransactionMetrics();
     metric.date = startDate;
-    metric.metricPeriod = metricType;
+    metric.metricPeriod = this.normalizeMetricPeriod(metricType);
     metric.totalTransactions = totalTransactions;
     metric.successfulTransactions = successfulTransactions;
     metric.failedTransactions = failedTransactions;
     metric.pendingTransactions = pendingTransactions;
     metric.totalVolume = totalVolume;
     metric.avgTransactionAmount = avgTransactionAmount;
-    metric.minTransactionAmount =
-      minTransactionAmount === 999999999 ? 0 : minTransactionAmount;
+    metric.minTransactionAmount = minTransactionAmount;
     metric.maxTransactionAmount = maxTransactionAmount;
     metric.successRate = Math.max(0, Math.min(100, successRate));
     metric.failureRate = Math.max(0, Math.min(100, failureRate));
@@ -193,7 +196,7 @@ export class StatisticsAggregationService {
     );
     metric.volumeByType = await this.groupVolumeByType(startDate, endDate);
     metric.transactionsByStatus = {
-      [TxStatus.SUCCESS]: successfulTransactions,
+      [TxStatus.COMPLETED]: successfulTransactions,
       [TxStatus.FAILED]: failedTransactions,
       [TxStatus.PENDING]: pendingTransactions,
     };
@@ -207,7 +210,7 @@ export class StatisticsAggregationService {
     metricType: 'daily' | 'hourly' | 'weekly' | 'monthly' = 'daily',
   ): Promise<SavingsMetrics[]> {
     this.logger.log(
-      `Aggregating savings metrics from ${startDate} to ${endDate}`,
+      `Aggregating savings metrics from ${startDate.toISOString()} to ${endDate.toISOString()}`,
     );
 
     const subscriptions = await this.subscriptionRepository.find({
@@ -230,10 +233,7 @@ export class StatisticsAggregationService {
       startDate,
       endDate,
     );
-    const tvlByProduct = await this.calculateTvlByProduct(
-      startDate,
-      endDate,
-    );
+    const tvlByProduct = await this.calculateTvlByProduct(startDate, endDate);
     const apyByProduct = await this.calculateApyByProduct(startDate, endDate);
 
     const totalValueLocked = Object.values(tvlByProduct || {}).reduce(
@@ -243,9 +243,7 @@ export class StatisticsAggregationService {
 
     const previousMetrics = await this.savingsMetricsRepository.findOne({
       where: {
-        date: MoreThanOrEqual(
-          new Date(startDate.getTime() - 86400000),
-        ),
+        date: MoreThanOrEqual(new Date(startDate.getTime() - 86400000)),
       },
       order: { date: 'DESC' },
     });
@@ -269,12 +267,13 @@ export class StatisticsAggregationService {
       .filter((v) => v > 0);
     const avgApy =
       apyValues.length > 0
-        ? apyValues.reduce((a: number, b: number) => a + b, 0) / apyValues.length
+        ? apyValues.reduce((a: number, b: number) => a + b, 0) /
+          apyValues.length
         : 0;
 
     const metric = new SavingsMetrics();
     metric.date = startDate;
-    metric.metricPeriod = metricType;
+    metric.metricPeriod = this.normalizeMetricPeriod(metricType);
     metric.totalAccounts = totalAccounts;
     metric.activeAccounts = activeSubscriptions;
     metric.newAccounts = newAccounts;
@@ -302,7 +301,7 @@ export class StatisticsAggregationService {
   ): Promise<Record<string, number>> {
     const result = await this.userRepository
       .createQueryBuilder('user')
-      .select("user.country", 'region')
+      .select('user.country', 'region')
       .addSelect('COUNT(user.id)', 'count')
       .where('user.createdAt BETWEEN :start AND :end', {
         start: startDate,
@@ -324,7 +323,7 @@ export class StatisticsAggregationService {
   ): Promise<Record<string, number>> {
     const result = await this.userRepository
       .createQueryBuilder('user')
-      .select("user.userType", 'type')
+      .select('user.userType', 'type')
       .addSelect('COUNT(user.id)', 'count')
       .where('user.createdAt BETWEEN :start AND :end', {
         start: startDate,

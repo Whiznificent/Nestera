@@ -17,6 +17,43 @@ export class TimeSeriesDataPointDto {
   changePercentage?: number;
 }
 
+export class ComparisonDto {
+  @ApiProperty({ type: Number })
+  previousValue: number;
+
+  @ApiProperty({ type: Number })
+  currentValue: number;
+
+  @ApiProperty({ type: Number })
+  change: number;
+
+  @ApiProperty({ type: Number })
+  changePercentage: number;
+
+  @ApiProperty({ type: String })
+  trend: 'up' | 'down' | 'stable';
+
+  @ApiPropertyOptional({ type: String })
+  comparisonPeriod?: string;
+}
+
+export class DrillDownDto {
+  @ApiProperty({ type: String })
+  category: string;
+
+  @ApiProperty({ type: Object })
+  breakdown: Record<string, any>;
+
+  @ApiPropertyOptional({ type: [TimeSeriesDataPointDto] })
+  timeSeries?: TimeSeriesDataPointDto[];
+
+  @ApiPropertyOptional({ type: Number })
+  total?: number;
+
+  @ApiPropertyOptional({ type: Number })
+  percentage?: number;
+}
+
 export class UserGrowthDto {
   @ApiProperty({ type: Number })
   totalUsers: number;
@@ -51,7 +88,7 @@ export class UserGrowthDto {
   @ApiPropertyOptional({ type: [TimeSeriesDataPointDto] })
   timeSeries?: TimeSeriesDataPointDto[];
 
-  @ApiPropertyOptional({ type: Object })
+  @ApiPropertyOptional({ type: () => ComparisonDto })
   comparison?: ComparisonDto;
 }
 
@@ -101,10 +138,10 @@ export class TransactionVolumeDto {
   @ApiPropertyOptional({ type: [TimeSeriesDataPointDto] })
   timeSeries?: TimeSeriesDataPointDto[];
 
-  @ApiPropertyOptional({ type: Object })
+  @ApiPropertyOptional({ type: () => ComparisonDto })
   comparison?: ComparisonDto;
 
-  @ApiPropertyOptional({ type: Object })
+  @ApiPropertyOptional({ type: () => DrillDownDto })
   drillDown?: DrillDownDto;
 }
 
@@ -160,10 +197,10 @@ export class SavingsMetricsDto {
   @ApiPropertyOptional({ type: [TimeSeriesDataPointDto] })
   timeSeries?: TimeSeriesDataPointDto[];
 
-  @ApiPropertyOptional({ type: Object })
+  @ApiPropertyOptional({ type: () => ComparisonDto })
   comparison?: ComparisonDto;
 
-  @ApiPropertyOptional({ type: Object })
+  @ApiPropertyOptional({ type: () => DrillDownDto })
   drillDown?: DrillDownDto;
 }
 
@@ -216,43 +253,6 @@ export class SystemHealthDto {
     message: string;
     timestamp: Date;
   }>;
-}
-
-export class ComparisonDto {
-  @ApiProperty({ type: Number })
-  previousValue: number;
-
-  @ApiProperty({ type: Number })
-  currentValue: number;
-
-  @ApiProperty({ type: Number })
-  change: number;
-
-  @ApiProperty({ type: Number })
-  changePercentage: number;
-
-  @ApiProperty({ type: String })
-  trend: 'up' | 'down' | 'stable';
-
-  @ApiPropertyOptional({ type: String })
-  comparisonPeriod?: string;
-}
-
-export class DrillDownDto {
-  @ApiProperty({ type: String })
-  category: string;
-
-  @ApiProperty({ type: Object })
-  breakdown: Record<string, any>;
-
-  @ApiPropertyOptional({ type: [TimeSeriesDataPointDto] })
-  timeSeries?: TimeSeriesDataPointDto[];
-
-  @ApiPropertyOptional({ type: Number })
-  total?: number;
-
-  @ApiPropertyOptional({ type: Number })
-  percentage?: number;
 }
 
 export class StatisticsOverviewDto {

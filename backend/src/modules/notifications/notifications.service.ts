@@ -17,6 +17,10 @@ import { User } from '../user/entities/user.entity';
 import { WaitlistEntry } from '../savings/entities/waitlist-entry.entity';
 import { WaitlistEvent } from '../savings/entities/waitlist-event.entity';
 import { Role } from '../../common/enums/role.enum';
+import {
+  decodeCursor,
+  encodeCursor,
+} from '../../common/helpers/cursor-pagination.helper';
 
 export interface SweepCompletedEvent {
   userId: string;
@@ -652,16 +656,75 @@ export class NotificationsService {
     userId: string,
     pageOptionsDto: PageOptionsDto,
   ): Promise<PageDto<Notification>> {
-    const [notifications, totalItemCount] =
-      await this.notificationRepository.findAndCount({
-        where: { userId },
-        order: { createdAt: 'DESC' },
-        skip: pageOptionsDto.skip,
-        take: pageOptionsDto.limit,
-      });
+    const pageSize = pageOptionsDto.pageSize;
 
-    const meta = new PageMetaDto({ pageOptionsDto, totalItemCount });
-    return new PageDto(notifications, meta);
+    if (pageOptionsDto.cursor) {
+      const cursor = decodeCursor(pageOptionsDto.cursor);
+      const query = this.notificationRepository
+        .createQueryBuilder('n')
+        .where('n.userId = :userId', { userId })
+        .andWhere(
+          '(n.createdAt < :cursorCreatedAt OR (n.createdAt = :cursorCreatedAt AND n.id < :cursorId))',
+          {
+            cursorCreatedAt: new Date(cursor.createdAt),
+            cursorId: cursor.id,
+          },
+        )
+        .orderBy('n.createdAt', 'DESC')
+        .addOrderBy('n.id', 'DESC')
+        .take(pageSize + 1);
+
+      const rows = await query.getMany();
+      const hasMore = rows.length > pageSize;
+      const notifications = hasMore ? rows.slice(0, pageSize) : rows;
+      const nextCursor =
+        hasMore && notifications.length > 0
+          ? encodeCursor({
+              createdAt:
+                notifications[notifications.length - 1].createdAt.toISOString(),
+              id: notifications[notifications.length - 1].id,
+            })
+          : null;
+      const totalItemCount = pageOptionsDto.shouldIncludeTotal
+        ? await this.notificationRepository.count({
+            where: { userId },
+          })
+        : undefined;
+
+      return new PageDto(
+        notifications,
+        new PageMetaDto({ pageOptionsDto, totalItemCount, nextCursor }),
+      );
+    }
+
+    const rows = await this.notificationRepository
+      .createQueryBuilder('n')
+      .where('n.userId = :userId', { userId })
+      .orderBy('n.createdAt', 'DESC')
+      .addOrderBy('n.id', 'DESC')
+      .skip(pageOptionsDto.skip)
+      .take(pageSize + 1)
+      .getMany();
+    const hasMore = rows.length > pageSize;
+    const notifications = hasMore ? rows.slice(0, pageSize) : rows;
+    const nextCursor =
+      hasMore && notifications.length > 0
+        ? encodeCursor({
+            createdAt:
+              notifications[notifications.length - 1].createdAt.toISOString(),
+            id: notifications[notifications.length - 1].id,
+          })
+        : null;
+    const totalItemCount = pageOptionsDto.shouldIncludeTotal
+      ? await this.notificationRepository.count({
+          where: { userId },
+        })
+      : undefined;
+
+    return new PageDto(
+      notifications,
+      new PageMetaDto({ pageOptionsDto, totalItemCount, nextCursor }),
+    );
   }
 
   /**

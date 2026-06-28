@@ -6,6 +6,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import compression from 'compression';
+import helmet from 'helmet';
 import { ConfigService } from '@nestjs/config';
 import { Logger } from 'nestjs-pino';
 import { AppModule } from './app.module';
@@ -20,6 +21,16 @@ import {
 import { VersionAnalyticsInterceptor } from './common/versioning/version-analytics.interceptor';
 import { VersionAnalyticsService } from './common/versioning/version-analytics.service';
 import { GracefulShutdownService } from './common/services/graceful-shutdown.service';
+import type { CorsOptions } from '@nestjs/common/interfaces/external/cors-options.interface';
+
+type AppCorsConfig = {
+  enabled: boolean;
+  origins: string[];
+  methods: string[];
+  allowedHeaders: string[];
+  credentials: boolean;
+  maxAge: number;
+};
 
 async function flushApplicationLogs(
   app: INestApplication,
@@ -49,12 +60,61 @@ async function bootstrap() {
   app.useLogger(app.get(Logger));
   const configService = app.get(ConfigService);
   const port = configService.get<number>('port');
+  const corsConfig = configService.get<AppCorsConfig>('cors');
 
   app.use(
     compression({
       threshold: 1024,
     }),
   );
+
+  app.use(
+    helmet({
+      // API serves JSON; disable CSP to avoid breaking Swagger UI assets.
+      contentSecurityPolicy: false,
+      frameguard: { action: 'deny' }, // clickjacking protection
+      noSniff: true, // MIME sniffing protection
+      referrerPolicy: { policy: 'no-referrer' },
+      crossOriginResourcePolicy: { policy: 'same-site' },
+    }),
+  );
+  app.use((_req, res, next) => {
+    // Legacy browser signal for additional reflected-XSS mitigation.
+    res.setHeader('X-XSS-Protection', '1; mode=block');
+    next();
+  });
+
+  if (corsConfig?.enabled) {
+    const allowedOrigins = corsConfig.origins;
+    const methods = corsConfig.methods;
+    const allowedHeaders = corsConfig.allowedHeaders;
+    const credentials =
+      corsConfig.credentials && !allowedOrigins.some((origin) => origin === '*');
+
+    const corsOptions: CorsOptions = {
+      origin: (origin, callback) => {
+        // Allow non-browser clients (no Origin header).
+        if (!origin) {
+          callback(null, true);
+          return;
+        }
+
+        if (allowedOrigins.includes(origin)) {
+          callback(null, true);
+          return;
+        }
+
+        callback(new Error(`Origin ${origin} is not allowed by CORS`), false);
+      },
+      credentials,
+      methods,
+      allowedHeaders,
+      optionsSuccessStatus: 204,
+      maxAge: corsConfig.maxAge,
+    };
+
+    app.enableCors(corsOptions);
+  }
 
   app.setGlobalPrefix('api');
   app.enableVersioning({

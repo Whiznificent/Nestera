@@ -22,11 +22,13 @@ import { YieldHandler } from './event-handlers/yield.handler';
 import { IndexerService } from './indexer.service';
 import { BalanceSyncService } from './balance-sync.service';
 import { ProtocolMetrics } from '../admin-analytics/entities/protocol-metrics.entity';
+import { TransactionsModule } from '../transactions/transactions.module';
 
 @Global()
 @Module({
   imports: [
     HttpModule,
+    TransactionsModule,
     CacheModule.register({
       ttl: 300, // 5 minutes default TTL
       max: 100, // Maximum number of items in cache

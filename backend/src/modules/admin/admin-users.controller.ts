@@ -25,9 +25,11 @@ import { AdminUsersService } from './admin-users.service';
 import { AdminUsersQueryDto } from './dto/admin-users-query.dto';
 import {
   BulkActionDto,
+  AdminUserListItemDto,
   UpdateUserRoleDto,
   UpdateUserStatusDto,
 } from './dto/admin-user.dto';
+import { PageDto } from '../../common/dto/page.dto';
 
 @ApiTags('admin')
 @ApiBearerAuth()
@@ -43,7 +45,7 @@ export class AdminUsersController {
     status: 200,
     description: 'Paginated user list with savings and transaction totals',
   })
-  listUsers(@Query() query: AdminUsersQueryDto) {
+  listUsers(@Query() query: AdminUsersQueryDto): Promise<PageDto<AdminUserListItemDto>> {
     return this.adminUsersService.listUsers(query);
   }
 

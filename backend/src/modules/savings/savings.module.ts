@@ -38,11 +38,13 @@ import { SavingsGoalShareEvent } from './entities/savings-goal-share-event.entit
 import { SavingsGoalSharingService } from './savings-goal-sharing.service';
 import { SavingsGoalSharingController } from './savings-goal-sharing.controller';
 import { MailModule } from '../mail/mail.module';
+import { TransactionsModule } from '../transactions/transactions.module';
 
 @Module({
   imports: [
     ScheduleModule.forRoot(),
     MailModule,
+    TransactionsModule,
     TypeOrmModule.forFeature([
       SavingsProduct,
       UserSubscription,

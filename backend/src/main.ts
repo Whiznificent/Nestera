@@ -10,7 +10,6 @@ import helmet from 'helmet';
 import { ConfigService } from '@nestjs/config';
 import { Logger } from 'nestjs-pino';
 import { AppModule } from './app.module';
-import { AllExceptionsFilter } from './common/filters/http-exception.filter';
 import { EnhancedExceptionFilter } from './common/filters/enhanced-exception.filter';
 import { ErrorCodeRegistry } from './common/services/error-code-registry.service';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
@@ -119,12 +118,6 @@ async function bootstrap() {
   app.setGlobalPrefix('api');
   app.enableVersioning({
     type: VersioningType.URI,
-    defaultVersion: '1',
-  });
-  app.useGlobalFilters(new AllExceptionsFilter());
-  app.setGlobalPrefix('api');
-  app.enableVersioning({
-    type: VersioningType.URI,
     defaultVersion: CURRENT_VERSION,
   });
 
@@ -157,26 +150,7 @@ async function bootstrap() {
     }),
   );
 
-  // Swagger setup
-  const swaggerConfig = new DocumentBuilder()
-    .setTitle('Nestera API')
-    .setDescription(
-      'API documentation for the Nestera platform (URI versioned, e.g., /v1/)',
-    )
-    .setVersion('1.0')
-    .addBearerAuth()
-    .build();
-  const document = SwaggerModule.createDocument(app, swaggerConfig);
-  SwaggerModule.setup('api/docs', app, document);
-
-  await app.listen(port || 3001);
-  console.log(
-    `Application is running on: http://localhost:${port}/api (with URI versioning, e.g., /v1/)`,
-  );
-  console.log(
-    `Swagger docs available at: http://localhost:${port}/api/docs (shows versioned endpoints)`,
-  );
-  // ── Swagger / OpenAPI setup ───────────────────────────────────────────────
+  // Swagger / OpenAPI setup
   const rateLimitDescription = `
 ## Authentication
 
@@ -293,38 +267,14 @@ The API supports URI-based versioning (\`/api/v1/...\` and \`/api/v2/...\`).
   SwaggerModule.setup('api/docs', app, combinedDoc);
 
   app.enableShutdownHooks();
-
-  const server = await app.listen(port || 3001);
-  // Redirect /api/docs → /api/v2/docs for convenience
-  const expressApp = app.getHttpAdapter().getInstance();
-  expressApp.get(
-    '/api/docs',
-    (_req: unknown, res: { redirect: (url: string) => void }) => {
-      res.redirect('/api/v2/docs');
-    },
-  );
-
   await app.listen(port || 3001);
   const logger = app.get(Logger);
   const gracefulShutdown = app.get(GracefulShutdownService);
   gracefulShutdown.registerHttpServer(app.getHttpServer());
   logger.log(`Application is running on: http://localhost:${port}/api`);
   logger.log(`Swagger docs (current):    http://localhost:${port}/api/docs`);
+  logger.log(`Swagger v1 docs:           http://localhost:${port}/api/v1/docs`);
   logger.log(`Swagger v2 docs:           http://localhost:${port}/api/v2/docs`);
-  logger.log(
-    `Swagger v1 docs (deprecated): http://localhost:${port}/api/v1/docs`,
-  );
-  logger.log(`Swagger v2 docs: http://localhost:${port}/api/v2/docs`);
-
-  const gracefulShutdown = app.get(GracefulShutdownService);
-
-  const shutdown = async (signal: string) => {
-    logger.log(`Received ${signal}, starting graceful shutdown...`);
-
-    // Stop accepting new connections
-    server.close(() => {
-      logger.log('HTTP server closed — no new connections accepted');
-    });
 
   const signals: NodeJS.Signals[] = ['SIGTERM', 'SIGINT'];
   for (const signal of signals) {
@@ -340,17 +290,6 @@ The API supports URI-based versioning (\`/api/v1/...\` and \`/api/v2/...\`).
         });
     });
   }
-
-    // NestJS onApplicationShutdown hooks handle the rest:
-    // drain in-flight requests, stop workers, close DB/Redis
-    await app.close();
-
-    logger.log('Application shut down successfully');
-    process.exit(0);
-  };
-
-  process.on('SIGTERM', () => shutdown('SIGTERM'));
-  process.on('SIGINT', () => shutdown('SIGINT'));
 
   process.on('uncaughtException', (error) => {
     logger.error('Uncaught Exception:', error);

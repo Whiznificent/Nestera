@@ -2,13 +2,6 @@ import { Global, Module } from '@nestjs/common';
 import { PiiEncryptionService } from './services/pii-encryption.service';
 import { RateLimitMonitorService } from './services/rate-limit-monitor.service';
 import { SecretsConfigService } from './services/secrets-config.service';
-
-@Global()
-@Module({
-  providers: [
-    RateLimitMonitorService,
-    PiiEncryptionService,
-    SecretsConfigService,
 import { IdempotencyService } from './services/idempotency.service';
 import { IdempotencyCleanupService } from './services/idempotency-cleanup.service';
 import { LogSanitizerService } from './services/log-sanitizer.service';
@@ -22,6 +15,7 @@ import { CacheModule } from '../modules/cache/cache.module';
   providers: [
     RateLimitMonitorService,
     PiiEncryptionService,
+    SecretsConfigService,
     IdempotencyService,
     IdempotencyCleanupService,
     LogSanitizerService,

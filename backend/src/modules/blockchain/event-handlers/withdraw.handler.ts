@@ -82,7 +82,7 @@ export class WithdrawHandler {
           amount: payload.amount,
           publicKey: payload.publicKey,
           eventId,
-          transactionHash:
+          txHash:
             typeof event.txHash === 'string' ? event.txHash : null,
           ledgerSequence:
             typeof event.ledger === 'number' ? String(event.ledger) : null,

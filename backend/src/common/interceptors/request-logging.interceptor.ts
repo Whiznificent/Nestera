@@ -9,31 +9,7 @@ import {
 import { Observable, throwError } from 'rxjs';
 import { tap, catchError } from 'rxjs/operators';
 import { Request, Response } from 'express';
-import { SecretsConfigService } from '../services/secrets-config.service';
-
-const REDACTED_HEADERS = new Set([
-  'authorization',
-  'cookie',
-  'x-api-key',
-  'x-auth-token',
-]);
-
-function sanitizeHeaders(headers: Record<string, any>): Record<string, string> {
-  const safe: Record<string, string> = {};
-  for (const [key, value] of Object.entries(headers)) {
-    if (REDACTED_HEADERS.has(key.toLowerCase())) {
-      safe[key] = '[REDACTED]';
-    } else if (
-      typeof value === 'string' &&
-      SecretsConfigService.isSensitiveKey(key)
-    ) {
-      safe[key] = '[REDACTED]';
-    } else {
-      safe[key] = String(value);
-    }
-  }
-  return safe;
-}
+import { v4 as uuidv4 } from 'uuid';
 import { Logger } from 'nestjs-pino';
 import { LogSanitizerService } from '../services/log-sanitizer.service';
 import { ApmService } from '../../modules/apm/apm.service';
@@ -67,33 +43,18 @@ export class RequestLoggingInterceptor implements NestInterceptor {
     const response = context.switchToHttp().getResponse<Response>();
 
     const correlationId =
-      (request.headers['x-correlation-id'] as string) || uuidv4();
       (request as Request & { correlationId?: string }).correlationId ||
       (request.headers['x-correlation-id'] as string) ||
-      'unknown';
+      uuidv4();
 
     const startTime = Date.now();
-    const { method, ip } = request;
+    const { method, ip, url: requestUrl } = request;
     const url = this.sanitizer?.sanitizeUrl(request.url) ?? request.url;
 
     (request as any).correlationId = correlationId;
     response.setHeader('x-correlation-id', correlationId);
-
-    const { method, url, ip } = request;
-    const userAgent = request.headers['user-agent'];
-
-    this.logger.log(
-      JSON.stringify({
-        type: 'REQUEST',
-        correlationId,
-        method,
-        url,
-        ip,
-        userAgent,
-        timestamp: new Date().toISOString(),
-      }),
     // Skip noisy paths
-    const rawPath = request.path ?? request.url;
+    const rawPath = request.path ?? requestUrl;
     if (SKIP_LOG_PATHS.has(rawPath)) {
       return next.handle();
     }

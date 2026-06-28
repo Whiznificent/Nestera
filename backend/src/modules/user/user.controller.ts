@@ -6,7 +6,6 @@ import {
   Param,
   Body,
   UseGuards,
-  Request,
   Post,
   UseInterceptors,
   UploadedFile,
@@ -132,14 +131,6 @@ export class UserController {
     description: 'Net worth breakdown',
     type: NetWorthDto,
   })
-      'Returns wallet balance, savings (flexible + locked), total, and percentage breakdown. ' +
-      'Requires a linked Stellar wallet; returns zero balances if no wallet is linked.',
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'Net worth data',
-    type: NetWorthDto,
-  })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   async getNetWorth(@CurrentUser() user: { id: string }): Promise<NetWorthDto> {
     const userEntity = await this.userService.findById(user.id);
@@ -186,8 +177,6 @@ export class UserController {
   }
 
   @Get(':id')
-  @ApiOperation({ summary: 'Get a user by ID' })
-  @ApiResponse({ status: 200, description: 'User found' })
   @ApiOperation({ summary: 'Get a user by ID (admin / internal use)' })
   @ApiParam({ name: 'id', description: 'User UUID' })
   @ApiResponse({ status: 200, description: 'User record' })
@@ -199,7 +188,6 @@ export class UserController {
 
   @Patch('me')
   @ApiOperation({ summary: 'Update the authenticated user profile' })
-  @ApiResponse({ status: 200, description: 'Profile updated' })
   @ApiBody({ type: UpdateUserDto })
   @ApiResponse({ status: 200, description: 'Profile updated' })
   @ApiResponse({ status: 400, description: 'Validation error' })
@@ -217,9 +205,6 @@ export class UserController {
   }
 
   @Post('avatar')
-  @ApiOperation({ summary: 'Upload a profile avatar image' })
-  @ApiResponse({ status: 201, description: 'Avatar uploaded' })
-  @ApiResponse({ status: 400, description: 'Invalid file type or size' })
   @ApiOperation({
     summary: 'Upload a profile avatar image',
     description: 'Accepts JPEG, PNG, or WebP up to 5 MB.',
@@ -252,9 +237,6 @@ export class UserController {
   }
 
   @Post('me/kyc-docs')
-  @ApiOperation({ summary: 'Upload a KYC verification document' })
-  @ApiResponse({ status: 201, description: 'Document uploaded' })
-  @ApiResponse({ status: 400, description: 'Invalid file type or size' })
   @ApiOperation({
     summary: 'Upload a KYC document',
     description:

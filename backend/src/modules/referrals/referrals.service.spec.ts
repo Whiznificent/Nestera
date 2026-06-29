@@ -3,10 +3,10 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { ReferralsService } from './referrals.service';
+import { ReferralFraudDetectionService } from './referral-fraud-detection.service';
 import { Referral, ReferralStatus } from './entities/referral.entity';
 import { ReferralCampaign } from './entities/referral-campaign.entity';
 import { User } from '../user/entities/user.entity';
-import { Transaction } from '../transactions/entities/transaction.entity';
 import {
   NotFoundException,
   BadRequestException,
@@ -18,8 +18,8 @@ describe('ReferralsService', () => {
   let referralRepository: Repository<Referral>;
   let campaignRepository: Repository<ReferralCampaign>;
   let userRepository: Repository<User>;
-  let transactionRepository: Repository<Transaction>;
   let eventEmitter: EventEmitter2;
+  let fraudDetectionService: jest.Mocked<ReferralFraudDetectionService>;
 
   const mockUser = {
     id: 'user-1',
@@ -39,6 +39,18 @@ describe('ReferralsService', () => {
   };
 
   beforeEach(async () => {
+    fraudDetectionService = {
+      enforceCreationRateLimit: jest.fn(),
+      evaluateReferral: jest.fn().mockResolvedValue({
+        isSuspicious: false,
+        reasons: [],
+        metadata: {},
+        shouldQuarantine: false,
+      }),
+      quarantineReferral: jest.fn(),
+      buildMetadataFingerprint: jest.fn().mockReturnValue(null),
+    } as unknown as jest.Mocked<ReferralFraudDetectionService>;
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         ReferralsService,
@@ -66,16 +78,14 @@ describe('ReferralsService', () => {
           },
         },
         {
-          provide: getRepositoryToken(Transaction),
-          useValue: {
-            find: jest.fn(),
-          },
-        },
-        {
           provide: EventEmitter2,
           useValue: {
             emit: jest.fn(),
           },
+        },
+        {
+          provide: ReferralFraudDetectionService,
+          useValue: fraudDetectionService,
         },
       ],
     }).compile();
@@ -88,9 +98,6 @@ describe('ReferralsService', () => {
       getRepositoryToken(ReferralCampaign),
     );
     userRepository = module.get<Repository<User>>(getRepositoryToken(User));
-    transactionRepository = module.get<Repository<Transaction>>(
-      getRepositoryToken(Transaction),
-    );
     eventEmitter = module.get<EventEmitter2>(EventEmitter2);
   });
 

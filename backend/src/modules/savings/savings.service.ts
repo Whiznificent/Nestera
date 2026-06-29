@@ -52,6 +52,7 @@ import { In, Repository } from 'typeorm';
 import { SavingsProductVersionAudit } from './entities/savings-product-version-audit.entity';
 import { WaitlistService } from './waitlist.service';
 import { MilestoneService } from './services/milestone.service';
+import { TransactionStateMachineService } from '../transactions/transaction-state-machine.service';
 
 export type SavingsGoalProgress = GoalProgressDto;
 
@@ -119,8 +120,7 @@ export class SavingsService {
     private readonly productVersionAuditRepository: Repository<SavingsProductVersionAudit>,
     @InjectRepository(WithdrawalRequest)
     private readonly withdrawalRepository: Repository<WithdrawalRequest>,
-    @InjectRepository(Transaction)
-    private readonly transactionRepository: Repository<Transaction>,
+    private readonly transactionStateMachine: TransactionStateMachineService,
     private readonly blockchainSavingsService: BlockchainSavingsService,
     private readonly predictiveEvaluatorService: PredictiveEvaluatorService,
     private readonly milestoneService: MilestoneService,
@@ -1043,16 +1043,29 @@ export class SavingsService {
 
     await this.subscribe(userId, resolvedProductId, amount, true);
 
-    const tx = this.transactionRepository.create({
+    const tx = await this.transactionStateMachine.createTransaction(
+      {
       userId,
       type: TxType.DEPOSIT,
       amount: String(amount),
-      status: TxStatus.COMPLETED,
       poolId: resolvedProductId,
       metadata: { goalId, goalName: goal.goalName, transferType: 'GOAL_AUTO' },
       txHash: `goal-transfer-${goalId}-${Date.now()}`,
+      },
+      { actor: 'savings-service', reason: 'Goal transfer initiated' },
+    );
+    await this.transactionStateMachine.transitionStatus(tx.id, TxStatus.PENDING_CONFIRMATION, {
+      actor: 'savings-service',
+      reason: 'Transfer awaiting confirmation',
     });
-    return this.transactionRepository.save(tx);
+    await this.transactionStateMachine.transitionStatus(tx.id, TxStatus.CONFIRMED, {
+      actor: 'savings-service',
+      reason: 'Transfer confirmed',
+    });
+    return this.transactionStateMachine.transitionStatus(tx.id, TxStatus.COMPLETED, {
+      actor: 'savings-service',
+      reason: 'Goal transfer completed',
+    });
   }
 
   async createWithdrawalRequest(
@@ -1148,6 +1161,8 @@ export class SavingsService {
       throw new NotFoundException(`Withdrawal ${withdrawalId} not found`);
     }
 
+    let transactionId: string | null = null;
+
     try {
       // Update status to processing
       withdrawal.status = WithdrawalStatus.PROCESSING;
@@ -1176,22 +1191,43 @@ export class SavingsService {
       }
 
       // Record in transaction ledger
-      const transaction = this.transactionRepository.create({
-        userId: withdrawal.userId,
-        type: TxType.WITHDRAW,
-        amount: String(withdrawal.netAmount),
-        status: TxStatus.COMPLETED,
-        publicKey: user?.publicKey || null,
-        metadata: {
-          withdrawalRequestId: withdrawal.id,
-          grossAmount: String(withdrawal.amount),
-          penalty: String(withdrawal.penalty),
-          netAmount: String(withdrawal.netAmount),
-          subscriptionId: withdrawal.subscriptionId,
-          reason: withdrawal.reason,
+      const transaction = await this.transactionStateMachine.createTransaction(
+        {
+          userId: withdrawal.userId,
+          type: TxType.WITHDRAW,
+          amount: String(withdrawal.netAmount),
+          publicKey: user?.publicKey || null,
+          metadata: {
+            withdrawalRequestId: withdrawal.id,
+            grossAmount: String(withdrawal.amount),
+            penalty: String(withdrawal.penalty),
+            netAmount: String(withdrawal.netAmount),
+            subscriptionId: withdrawal.subscriptionId,
+            reason: withdrawal.reason,
+          },
         },
+        {
+          actor: 'savings-service',
+          reason: 'Withdrawal ledger transaction created',
+        },
+      );
+      transactionId = transaction.id;
+      await this.transactionStateMachine.transitionStatus(
+        transaction.id,
+        TxStatus.PENDING_CONFIRMATION,
+        {
+          actor: 'savings-service',
+          reason: 'Withdrawal awaiting confirmation',
+        },
+      );
+      await this.transactionStateMachine.transitionStatus(transaction.id, TxStatus.CONFIRMED, {
+        actor: 'savings-service',
+        reason: 'Withdrawal confirmed',
       });
-      await this.transactionRepository.save(transaction);
+      await this.transactionStateMachine.transitionStatus(transaction.id, TxStatus.COMPLETED, {
+        actor: 'savings-service',
+        reason: 'Withdrawal completed',
+      });
 
       // Update subscription amount
       const newAmount =
@@ -1220,6 +1256,26 @@ export class SavingsService {
         timestamp: new Date(),
       });
     } catch (error) {
+      if (transactionId) {
+        try {
+          await this.transactionStateMachine.transitionStatus(
+            transactionId,
+            TxStatus.FAILED,
+            {
+              actor: 'savings-service',
+              reason: 'Withdrawal processing failed',
+              metadata: {
+                error:
+                  error instanceof Error
+                    ? error.message
+                    : 'Unknown withdrawal error',
+              },
+            },
+          );
+        } catch {
+          // If transition is not valid from current state, keep original error flow.
+        }
+      }
       withdrawal.status = WithdrawalStatus.FAILED;
       await this.withdrawalRepository.save(withdrawal);
       throw error;

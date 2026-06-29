@@ -10,6 +10,7 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import {
   ApiBearerAuth,
   ApiOperation,
@@ -150,6 +151,7 @@ export class GovernanceProposalsController {
   @Post(':id/vote')
   @UseGuards(JwtAuthGuard)
   @Idempotent({ ttlSeconds: 3600 })
+  @Throttle({ vote: { limit: 10, ttl: 60_000 } })
   @ApiBearerAuth()
   @ApiOperation({
     summary: 'Cast a vote on an active proposal',
@@ -286,7 +288,68 @@ export class GovernanceProposalsController {
   cancelProposal(
     @Param('id') id: string,
     @CurrentUser() user: { id: string },
+    @Body('reason') reason?: string,
   ): Promise<ProposalResponseDto> {
-    return this.governanceService.cancelProposal(id, user.id);
+    return this.governanceService.cancelProposal(id, user.id, reason);
+  }
+
+  @Post(':id/finalize')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Finalize voting on a proposal (ACTIVE → PASSED / FAILED)',
+    description:
+      'Evaluates weighted quorum and FOR/AGAINST majority once the voting window ' +
+      'has closed on-chain and transitions the proposal to PASSED or FAILED. ' +
+      'The scheduler does this automatically every 30 s; call this endpoint to ' +
+      'trigger finalization immediately after the end block is reached.',
+  })
+  @ApiParam({ name: 'id', type: 'string', format: 'uuid' })
+  @ApiResponse({
+    status: 201,
+    description: 'Proposal finalized',
+    type: ProposalResponseDto,
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Voting window not yet closed or proposal not ACTIVE',
+  })
+  finalizeProposal(
+    @Param('id') id: string,
+    @CurrentUser() user: { id: string },
+  ): Promise<ProposalResponseDto> {
+    return this.governanceService.finalizeVoting(id, user.id);
+  }
+
+  @Get(':id/transitions')
+  @ApiOperation({
+    summary: 'Get the full lifecycle transition history for a proposal',
+    description:
+      'Returns an immutable, time-ordered audit trail of every state change ' +
+      'that occurred on the proposal, including who triggered each transition, ' +
+      'the reason, and structured metadata (vote tallies, quorum figures, etc.).',
+  })
+  @ApiParam({ name: 'id', type: 'string', format: 'uuid' })
+  @ApiResponse({
+    status: 200,
+    description: 'Ordered list of state transitions',
+    schema: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          id:            { type: 'string', format: 'uuid' },
+          fromStatus:    { type: 'string' },
+          toStatus:      { type: 'string' },
+          triggeredBy:   { type: 'string', nullable: true },
+          reason:        { type: 'string', nullable: true },
+          metadata:      { type: 'object', nullable: true },
+          transitionedAt: { type: 'string', format: 'date-time' },
+        },
+      },
+    },
+  })
+  getTransitionHistory(@Param('id') id: string) {
+    return this.governanceService.getTransitionHistory(id);
   }
 }

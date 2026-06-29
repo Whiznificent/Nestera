@@ -40,16 +40,18 @@ import { SavingsGoalShare } from './entities/savings-goal-share.entity';
 import { SavingsGoalShareEvent } from './entities/savings-goal-share-event.entity';
 import { SavingsGoalSharingService } from './savings-goal-sharing.service';
 import { SavingsGoalSharingController } from './savings-goal-sharing.controller';
-// import { ActivityTimelineService } from './services/activity-timeline.service';
-// import { MilestoneNotificationEngineService } from './services/milestone-notification-engine.service';
+import { ActivityTimelineService } from './services/activity-timeline.service';
+import { MilestoneNotificationEngineService } from './services/milestone-notification-engine.service';
 import { SavingsCalculatorService } from './services/savings-calculator.service';
 import { GroupPermissionGuard } from './guards/group-permission.guard';
 import { MailModule } from '../mail/mail.module';
+import { TransactionsModule } from '../transactions/transactions.module';
 
 @Module({
   imports: [
     ScheduleModule.forRoot(),
     MailModule,
+    TransactionsModule,
     TypeOrmModule.forFeature([
       SavingsProduct,
       UserSubscription,
@@ -93,8 +95,8 @@ import { MailModule } from '../mail/mail.module';
     AutoDepositService,
     GoalTransferService,
     SavingsGoalSharingService,
-    // ActivityTimelineService,
-    // MilestoneNotificationEngineService,
+    ActivityTimelineService,
+    MilestoneNotificationEngineService,
     SavingsCalculatorService,
     GroupPermissionGuard,
   ],

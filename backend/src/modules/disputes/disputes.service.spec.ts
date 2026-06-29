@@ -4,6 +4,7 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import {
   Dispute,
   DisputeMessage,
+  DisputeTimeline,
   DisputeStatus,
   DisputeTimeline,
 } from './entities/dispute.entity';
@@ -31,11 +32,13 @@ describe('DisputesService', () => {
   };
 
   const mockTimelineRepository = {
-    create: jest.fn(),
-    save: jest.fn(),
+    create: jest.fn((data) => data),
+    save: jest.fn((data) => Promise.resolve(data)),
   };
 
-  const mockNotificationsService = {};
+  const mockNotificationsService = {
+    createNotification: jest.fn(),
+  };
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({

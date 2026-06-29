@@ -19,9 +19,14 @@ import {
   SavingsGroupActivity,
   SavingsGroupActivityType,
 } from './entities/savings-group-activity.entity';
+import {
+  GroupInvitation,
+  InvitationStatus,
+} from './entities/group-invitation.entity';
 import { CreateSavingsGroupDto } from './dto/create-savings-group.dto';
 import { ContributeSavingsGroupDto } from './dto/contribute-savings-group.dto';
 import { InviteMemberDto } from './dto/invite-member.dto';
+import { RespondInvitationDto } from './dto/respond-invitation.dto';
 
 @Injectable()
 export class GroupSavingsService {
@@ -32,6 +37,8 @@ export class GroupSavingsService {
     private readonly memberRepository: Repository<SavingsGroupMember>,
     @InjectRepository(SavingsGroupActivity)
     private readonly activityRepository: Repository<SavingsGroupActivity>,
+    @InjectRepository(GroupInvitation)
+    private readonly invitationRepository: Repository<GroupInvitation>,
     private readonly dataSource: DataSource,
   ) {}
 
@@ -110,7 +117,7 @@ export class GroupSavingsService {
     adminId: string,
     groupId: string,
     dto: InviteMemberDto,
-  ): Promise<SavingsGroupMember> {
+  ): Promise<GroupInvitation> {
     const group = await this.groupRepository.findOneBy({ id: groupId });
     if (!group) throw new NotFoundException('Savings group not found');
 
@@ -123,6 +130,7 @@ export class GroupSavingsService {
     }
 
     const targetUserId = dto.userId;
+
     const existingMember = await this.memberRepository.findOneBy({
       groupId,
       userId: targetUserId,
@@ -131,24 +139,166 @@ export class GroupSavingsService {
       throw new ConflictException('User is already a member of this group');
     }
 
-    return await this.dataSource.transaction(async (manager) => {
-      const member = manager.create(SavingsGroupMember, {
+    const pendingInvitation = await this.invitationRepository.findOne({
+      where: {
+        groupId,
+        inviteeId: targetUserId,
+        status: InvitationStatus.PENDING,
+      },
+    });
+    if (pendingInvitation) {
+      throw new ConflictException(
+        'A pending invitation already exists for this user',
+      );
+    }
+
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + 7);
+
+    const invitationData = this.invitationRepository.create({
+      groupId,
+      inviterId: adminId,
+      inviteeId: targetUserId,
+      message: dto.message ?? undefined,
+      status: InvitationStatus.PENDING,
+      expiresAt,
+    });
+    const savedInvitation =
+      await this.invitationRepository.save(invitationData);
+
+    await this.activityRepository.save(
+      this.activityRepository.create({
         groupId,
         userId: targetUserId,
+        type: SavingsGroupActivityType.INVITED,
+        metadata: { invitedBy: adminId, invitationId: savedInvitation.id },
+      }),
+    );
+
+    return savedInvitation;
+  }
+
+  async acceptInvitation(
+    invitationId: string,
+    userId: string,
+    dto?: RespondInvitationDto,
+  ): Promise<SavingsGroupMember> {
+    const invitation = await this.invitationRepository.findOne({
+      where: { id: invitationId, inviteeId: userId },
+    });
+    if (!invitation) {
+      throw new NotFoundException('Invitation not found');
+    }
+    if (invitation.status !== InvitationStatus.PENDING) {
+      throw new BadRequestException('Invitation is not pending');
+    }
+    if (invitation.expiresAt && invitation.expiresAt < new Date()) {
+      invitation.status = InvitationStatus.EXPIRED;
+      await this.invitationRepository.save(invitation);
+      throw new BadRequestException('Invitation has expired');
+    }
+
+    const group = await this.groupRepository.findOneBy({
+      id: invitation.groupId,
+    });
+    if (!group || group.status !== SavingsGroupStatus.OPEN) {
+      throw new BadRequestException('Group is not open for joining');
+    }
+
+    return await this.dataSource.transaction(async (manager) => {
+      invitation.status = InvitationStatus.ACCEPTED;
+      invitation.respondedAt = new Date();
+      await manager.save(invitation);
+
+      const member = manager.create(SavingsGroupMember, {
+        groupId: invitation.groupId,
+        userId,
         role: SavingsGroupRole.MEMBER,
         contributionAmount: 0,
       });
       const savedMember = await manager.save(member);
 
       const activity = manager.create(SavingsGroupActivity, {
-        groupId,
-        userId: targetUserId,
-        type: SavingsGroupActivityType.INVITED,
-        metadata: { invitedBy: adminId },
+        groupId: invitation.groupId,
+        userId,
+        type: SavingsGroupActivityType.JOINED,
+        metadata: { invitationId, invitedBy: invitation.inviterId },
       });
       await manager.save(activity);
 
       return savedMember;
+    });
+  }
+
+  async rejectInvitation(
+    invitationId: string,
+    userId: string,
+    dto?: RespondInvitationDto,
+  ): Promise<GroupInvitation> {
+    const invitation = await this.invitationRepository.findOne({
+      where: { id: invitationId, inviteeId: userId },
+    });
+    if (!invitation) {
+      throw new NotFoundException('Invitation not found');
+    }
+    if (invitation.status !== InvitationStatus.PENDING) {
+      throw new BadRequestException('Invitation is not pending');
+    }
+
+    invitation.status = InvitationStatus.REJECTED;
+    invitation.respondedAt = new Date();
+    return this.invitationRepository.save(invitation);
+  }
+
+  async cancelInvitation(
+    invitationId: string,
+    adminId: string,
+  ): Promise<GroupInvitation> {
+    const invitation = await this.invitationRepository.findOne({
+      where: { id: invitationId },
+      relations: ['group'],
+    });
+    if (!invitation) {
+      throw new NotFoundException('Invitation not found');
+    }
+    const adminMember = await this.memberRepository.findOneBy({
+      groupId: invitation.groupId,
+      userId: adminId,
+    });
+    if (!adminMember || adminMember.role !== SavingsGroupRole.ADMIN) {
+      throw new ForbiddenException('Only group admins can cancel invitations');
+    }
+    if (invitation.status !== InvitationStatus.PENDING) {
+      throw new BadRequestException('Can only cancel pending invitations');
+    }
+
+    invitation.status = InvitationStatus.CANCELLED;
+    return this.invitationRepository.save(invitation);
+  }
+
+  async getInvitations(
+    groupId: string,
+    adminId: string,
+  ): Promise<GroupInvitation[]> {
+    const adminMember = await this.memberRepository.findOneBy({
+      groupId,
+      userId: adminId,
+    });
+    if (!adminMember || adminMember.role !== SavingsGroupRole.ADMIN) {
+      throw new ForbiddenException('Only group admins can view invitations');
+    }
+    return this.invitationRepository.find({
+      where: { groupId },
+      relations: ['inviter', 'invitee'],
+      order: { createdAt: 'DESC' },
+    });
+  }
+
+  async getMyInvitations(userId: string): Promise<GroupInvitation[]> {
+    return this.invitationRepository.find({
+      where: { inviteeId: userId },
+      relations: ['group', 'inviter'],
+      order: { createdAt: 'DESC' },
     });
   }
 

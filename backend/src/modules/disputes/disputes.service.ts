@@ -20,8 +20,46 @@ import {
 import { NotificationsService } from '../notifications/notifications.service';
 import { NotificationType } from '../notifications/entities/notification.entity';
 
+const ALLOWED_TRANSITIONS: Record<DisputeStatus, DisputeStatus[]> = {
+  [DisputeStatus.OPEN]: [
+    DisputeStatus.IN_PROGRESS,
+    DisputeStatus.UNDER_REVIEW,
+    DisputeStatus.CLOSED,
+  ],
+  [DisputeStatus.IN_PROGRESS]: [
+    DisputeStatus.UNDER_REVIEW,
+    DisputeStatus.RESOLVED,
+    DisputeStatus.CLOSED,
+  ],
+  [DisputeStatus.UNDER_REVIEW]: [
+    DisputeStatus.RESOLVED,
+    DisputeStatus.ESCALATED,
+    DisputeStatus.CLOSED,
+  ],
+  [DisputeStatus.RESOLVED]: [DisputeStatus.CLOSED, DisputeStatus.OPEN],
+  [DisputeStatus.CLOSED]: [],
+  [DisputeStatus.ESCALATED]: [
+    DisputeStatus.UNDER_REVIEW,
+    DisputeStatus.RESOLVED,
+    DisputeStatus.CLOSED,
+  ],
+};
+
 @Injectable()
 export class DisputesService {
+  private assertValidTransition(
+    current: DisputeStatus,
+    next: DisputeStatus,
+    action: string,
+  ): void {
+    const allowed = ALLOWED_TRANSITIONS[current];
+    if (!allowed.includes(next)) {
+      throw new BadRequestException(
+        `Cannot ${action}: transition from ${current} to ${next} is not allowed`,
+      );
+    }
+  }
+
   constructor(
     @InjectRepository(Dispute)
     private readonly disputeRepository: Repository<Dispute>,
@@ -122,6 +160,11 @@ export class DisputesService {
     const dispute = await this.findOne(id);
     const previousState = { status: dispute.status };
 
+    this.assertValidTransition(
+      dispute.status,
+      DisputeStatus.UNDER_REVIEW,
+      'start investigation',
+    );
     dispute.status = DisputeStatus.UNDER_REVIEW;
     dispute.assignedTo = actor;
     dispute.assignedAt = new Date();
@@ -150,6 +193,11 @@ export class DisputesService {
     const dispute = await this.findOne(id);
     const previousState = { status: dispute.status };
 
+    this.assertValidTransition(
+      dispute.status,
+      DisputeStatus.RESOLVED,
+      'resolve dispute',
+    );
     dispute.status = DisputeStatus.RESOLVED;
     dispute.resolvedAt = new Date();
     dispute.resolvedBy = actor;
@@ -175,6 +223,11 @@ export class DisputesService {
     const dispute = await this.findOne(id);
     const previousState = { status: dispute.status };
 
+    this.assertValidTransition(
+      dispute.status,
+      DisputeStatus.CLOSED,
+      'close dispute',
+    );
     dispute.status = DisputeStatus.CLOSED;
 
     const updatedDispute = await this.disputeRepository.save(dispute);
@@ -197,6 +250,11 @@ export class DisputesService {
     const dispute = await this.findOne(id);
     const previousState = { status: dispute.status };
 
+    this.assertValidTransition(
+      dispute.status,
+      DisputeStatus.ESCALATED,
+      'escalate dispute',
+    );
     dispute.status = DisputeStatus.ESCALATED;
     dispute.escalatedTo = actor;
     dispute.escalatedAt = new Date();
@@ -209,6 +267,41 @@ export class DisputesService {
         action: 'DISPUTE_ESCALATED',
         performedBy: actor,
         description: 'Dispute escalated',
+        previousState,
+        newState: { status: dispute.status },
+      }),
+    );
+
+    return updatedDispute;
+  }
+
+  async reopenDispute(
+    id: string,
+    actor: string,
+    reason: string,
+  ): Promise<Dispute> {
+    const dispute = await this.findOne(id);
+    const previousState = { status: dispute.status };
+
+    this.assertValidTransition(
+      dispute.status,
+      DisputeStatus.OPEN,
+      'reopen dispute',
+    );
+
+    dispute.status = DisputeStatus.OPEN;
+    (dispute as any).resolvedAt = null;
+    (dispute as any).resolvedBy = null;
+    (dispute as any).resolution = null;
+
+    const updatedDispute = await this.disputeRepository.save(dispute);
+
+    await this.timelineRepository.save(
+      this.timelineRepository.create({
+        disputeId: id,
+        action: 'DISPUTE_REOPENED',
+        performedBy: actor,
+        description: `Reopened: ${reason}`,
         previousState,
         newState: { status: dispute.status },
       }),

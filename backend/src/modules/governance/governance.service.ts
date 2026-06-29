@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -7,7 +8,8 @@ import {
 } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { QueryFailedError, Repository } from 'typeorm';
+import { CacheStrategyService } from '../cache/cache-strategy.service';
 import { StellarService } from '../blockchain/stellar.service';
 import { SavingsService } from '../blockchain/savings.service';
 import { TransactionsService } from '../transactions/transactions.service';
@@ -31,12 +33,28 @@ import {
 } from './entities/governance-proposal.entity';
 import { Vote, VoteDirection } from './entities/vote.entity';
 import { Delegation } from './entities/delegation.entity';
+import { ProposalTransition } from './entities/proposal-transition.entity';
+import { ProposalLifecycleService } from './governance-lifecycle.service';
 import { VotingPowerResponseDto } from './dto/voting-power-response.dto';
 import { TxStatus, TxType } from '../transactions/entities/transaction.entity';
 import { LedgerTransaction } from '../blockchain/entities/transaction.entity';
 
 /** Timelock duration in milliseconds (24 hours) */
 const TIMELOCK_DURATION_MS = 24 * 60 * 60 * 1000;
+
+/** How long the server-side vote dedup cache entry lives (24 hours). */
+const VOTE_DEDUP_TTL_MS = 24 * 60 * 60 * 1000;
+
+/** PostgreSQL unique-constraint violation code. */
+const PG_UNIQUE_VIOLATION = '23505';
+
+function isUniqueViolation(err: unknown): boolean {
+  if (!(err instanceof QueryFailedError)) return false;
+  const code =
+    (err as unknown as Record<string, string>).code ??
+    (err as unknown as { driverError?: { code?: string } }).driverError?.code;
+  return code === PG_UNIQUE_VIOLATION;
+}
 
 @Injectable()
 export class GovernanceService {
@@ -46,6 +64,8 @@ export class GovernanceService {
     private readonly savingsService: SavingsService,
     private readonly transactionsService: TransactionsService,
     private readonly eventEmitter: EventEmitter2,
+    private readonly lifecycleService: ProposalLifecycleService,
+    private readonly cacheStrategy: CacheStrategyService,
     @InjectRepository(GovernanceProposal)
     private readonly proposalRepo: Repository<GovernanceProposal>,
     @InjectRepository(Vote)
@@ -374,14 +394,39 @@ export class GovernanceService {
       throw new BadRequestException('Proposal is not active for voting');
     }
 
-    // Check for double voting
+    // Enforce ledger-level voting window boundaries (startBlock..endBlock).
+    // Status alone is insufficient: a proposal is created ACTIVE immediately
+    // but its window may not have opened yet, or may have already closed.
+    await this.lifecycleService.assertValidVotingWindow(proposal);
+
+    // ── Layer 1: server-side dedup key ────────────────────────────────────
+    // A cache entry keyed on (walletAddress, proposalId) is set after the
+    // first successful vote. Subsequent requests fail here before touching
+    // the database, preventing both accidental retries and intentional spam.
+    const voteDedupKey = `vote:${user.publicKey}:${proposal.id}`;
+    const cachedDuplicate = await this.cacheStrategy.get<true>(voteDedupKey);
+    if (cachedDuplicate) {
+      throw new ConflictException(
+        'You have already voted on this proposal',
+      );
+    }
+
+    // ── Layer 2: authoritative DB read ────────────────────────────────────
+    // Catches votes submitted before the cache entry was set (e.g. on a
+    // fresh deployment or after a cache flush).
     const existingVote = await this.voteRepo.findOneBy({
       walletAddress: user.publicKey,
       proposalId: proposal.id,
     });
-
     if (existingVote) {
-      throw new BadRequestException('User has already voted on this proposal');
+      // Backfill the cache so future requests hit layer 1 instead.
+      await this.cacheStrategy.set(voteDedupKey, true, VOTE_DEDUP_TTL_MS, [
+        'vote',
+        `proposal:${proposal.id}`,
+      ]);
+      throw new ConflictException(
+        'You have already voted on this proposal',
+      );
     }
 
     const votingPowerResult = await this.getUserVotingPower(userId);
@@ -391,8 +436,6 @@ export class GovernanceService {
       throw new BadRequestException('User has no voting power');
     }
 
-    // In a real scenario, this would involve a Stellar transaction.
-    // For now, we simulate the transaction hash and save the vote to DB.
     const mockTxHash = `0x${Math.random().toString(16).slice(2, 10)}${Date.now().toString(16)}`;
 
     const vote = this.voteRepo.create({
@@ -403,9 +446,28 @@ export class GovernanceService {
       proposalId: proposal.id,
     });
 
-    await this.voteRepo.save(vote);
+    // ── Layer 3: DB unique constraint ─────────────────────────────────────
+    // The uq_vote_wallet_proposal UNIQUE constraint on (walletAddress,
+    // proposalId) is the last line of defence for concurrent requests that
+    // both slipped past layers 1 and 2 before either committed.
+    try {
+      await this.voteRepo.save(vote);
+    } catch (error) {
+      if (isUniqueViolation(error)) {
+        throw new ConflictException(
+          'Duplicate vote rejected by the database — you have already voted on this proposal',
+        );
+      }
+      throw error;
+    }
 
-    // Emit event for real-time updates
+    // Populate dedup cache so every subsequent request from this wallet is
+    // rejected at layer 1 without a DB round-trip.
+    await this.cacheStrategy.set(voteDedupKey, true, VOTE_DEDUP_TTL_MS, [
+      'vote',
+      `proposal:${proposal.id}`,
+    ]);
+
     this.eventEmitter.emit('governance.vote_cast', {
       proposalId: proposal.id,
       onChainId: proposal.onChainId,
@@ -459,17 +521,31 @@ export class GovernanceService {
     const proposal = await this.proposalRepo.findOneBy({ id: proposalId });
     if (!proposal)
       throw new NotFoundException(`Proposal ${proposalId} not found`);
+
+    // State machine check is handled inside transitionTo, but guard here first
+    // to give a clearer error before the quorum check.
     if (proposal.status !== ProposalStatus.PASSED) {
       throw new BadRequestException('Only passed proposals can be queued');
     }
-    proposal.status = ProposalStatus.QUEUED;
-    proposal.timelockEndsAt = new Date(Date.now() + TIMELOCK_DURATION_MS);
-    const saved = await this.proposalRepo.save(proposal);
-    this.eventEmitter.emit('governance.proposal.queued', {
-      proposalId: saved.id,
+
+    // Re-verify quorum at queue time — the PASSED status may have been set by
+    // the indexer without a full weighted-quorum check.
+    await this.lifecycleService.verifyQuorumForQueue(proposal);
+
+    const timelockEndsAt = new Date(Date.now() + TIMELOCK_DURATION_MS);
+    proposal.timelockEndsAt = timelockEndsAt;
+
+    await this.lifecycleService.transitionTo(proposal, ProposalStatus.QUEUED, {
+      triggeredBy: userId,
+      reason: `Queued by ${userId}; timelock ends ${timelockEndsAt.toISOString()}`,
     });
+
+    this.eventEmitter.emit('governance.proposal.queued', {
+      proposalId: proposal.id,
+    });
+
     const currentLedger = await this.getCurrentLedger();
-    return this.toProposalResponse(saved, currentLedger);
+    return this.toProposalResponse(proposal, currentLedger);
   }
 
   async executeProposal(
@@ -479,47 +555,86 @@ export class GovernanceService {
     const proposal = await this.proposalRepo.findOneBy({ id: proposalId });
     if (!proposal)
       throw new NotFoundException(`Proposal ${proposalId} not found`);
+
     if (proposal.status !== ProposalStatus.QUEUED) {
       throw new BadRequestException('Only queued proposals can be executed');
     }
+
     if (!proposal.timelockEndsAt || new Date() < proposal.timelockEndsAt) {
-      throw new BadRequestException('Timelock period has not elapsed yet');
+      throw new BadRequestException(
+        `Timelock period has not elapsed yet — unlocks at ${proposal.timelockEndsAt?.toISOString() ?? 'unknown'}`,
+      );
     }
-    proposal.status = ProposalStatus.EXECUTED;
+
     proposal.executedAt = new Date();
-    const saved = await this.proposalRepo.save(proposal);
+
+    await this.lifecycleService.transitionTo(
+      proposal,
+      ProposalStatus.EXECUTED,
+      {
+        triggeredBy: userId,
+        reason: `Executed by ${userId} after timelock`,
+        metadata: { executedAt: proposal.executedAt.toISOString() },
+      },
+    );
+
     this.eventEmitter.emit('governance.proposal.executed', {
-      proposalId: saved.id,
+      proposalId: proposal.id,
     });
+
     const currentLedger = await this.getCurrentLedger();
-    return this.toProposalResponse(saved, currentLedger);
+    return this.toProposalResponse(proposal, currentLedger);
   }
 
   async cancelProposal(
     proposalId: string,
     userId: string,
+    reason?: string,
   ): Promise<ProposalResponseDto> {
     const proposal = await this.proposalRepo.findOneBy({ id: proposalId });
     if (!proposal)
       throw new NotFoundException(`Proposal ${proposalId} not found`);
+
     if (proposal.createdByUserId !== userId) {
       throw new ForbiddenException('Only the proposal creator can cancel it');
     }
-    if (
-      proposal.status === ProposalStatus.EXECUTED ||
-      proposal.status === ProposalStatus.CANCELLED
-    ) {
-      throw new BadRequestException(
-        `Cannot cancel a proposal with status ${proposal.status}`,
-      );
-    }
-    proposal.status = ProposalStatus.CANCELLED;
-    const saved = await this.proposalRepo.save(proposal);
+
+    // transitionTo enforces that EXECUTED and CANCELLED are terminal states
+    await this.lifecycleService.transitionTo(
+      proposal,
+      ProposalStatus.CANCELLED,
+      {
+        triggeredBy: userId,
+        reason: reason ?? `Cancelled by creator ${userId}`,
+      },
+    );
+
     this.eventEmitter.emit('governance.proposal.cancelled', {
-      proposalId: saved.id,
+      proposalId: proposal.id,
     });
+
     const currentLedger = await this.getCurrentLedger();
-    return this.toProposalResponse(saved, currentLedger);
+    return this.toProposalResponse(proposal, currentLedger);
+  }
+
+  // ── Lifecycle helpers ─────────────────────────────────────────────────────
+
+  async finalizeVoting(
+    proposalId: string,
+    userId: string,
+  ): Promise<ProposalResponseDto> {
+    const proposal = await this.lifecycleService.finalizeVoting(
+      proposalId,
+      userId,
+    );
+    const currentLedger = await this.getCurrentLedger();
+    return this.toProposalResponse(proposal, currentLedger);
+  }
+
+  async getTransitionHistory(
+    proposalId: string,
+  ): Promise<ProposalTransition[]> {
+    return this.lifecycleService.getTransitionHistory(proposalId);
   }
 
   // ── Delegation (#542) ──────────────────────────────────────────────────────

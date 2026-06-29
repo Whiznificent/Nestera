@@ -281,7 +281,7 @@ const envValidationSchema = Joi.object({
       imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
-        redis: config.get<string>('REDIS_URL') || 'redis://localhost:6379',
+        url: config.get<string>('redis.url') || 'redis://localhost:6379',
       }),
     }),
     EventEmitterModule.forRoot(),
@@ -350,6 +350,14 @@ const envValidationSchema = Joi.object({
         name: 'export',
         ttl: 15 * 60 * 1000, // 15 minutes
         limit: 6,
+      },
+      {
+        // Governance vote endpoint — intentionally tight because one wallet
+        // should cast at most one vote per proposal.  Legitimate burst usage
+        // (voting on several proposals in quick succession) fits within 10/min.
+        name: 'vote',
+        ttl: 60_000, // 1 minute
+        limit: 10,
       },
     ]),
   ],

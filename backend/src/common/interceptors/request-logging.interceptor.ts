@@ -10,10 +10,10 @@ import { Observable, throwError } from 'rxjs';
 import { tap, catchError } from 'rxjs/operators';
 import { Request, Response } from 'express';
 import { SecretsConfigService } from '../services/secrets-config.service';
+import { v4 as uuidv4 } from 'uuid';
 import { Logger } from 'nestjs-pino';
 import { LogSanitizerService } from '../services/log-sanitizer.service';
 import { ApmService } from '../../modules/apm/apm.service';
-import { v4 as uuidv4 } from 'uuid';
 
 const REDACTED_HEADERS = new Set([
   'authorization',
@@ -66,13 +66,19 @@ export class RequestLoggingInterceptor implements NestInterceptor {
     const response = context.switchToHttp().getResponse<Response>();
 
     const correlationId =
-      (request.headers['x-correlation-id'] as string) || uuidv4();
-    const startTime = Date.now();
+      (request as Request & { correlationId?: string }).correlationId ||
+      (request.headers['x-correlation-id'] as string) ||
+      uuidv4();
 
-    (request as any).correlationId = correlationId;
+    const startTime = Date.now();
+    const { method, ip, url: requestUrl } = request;
+    const url = this.sanitizer?.sanitizeUrl(request.url) ?? request.url;
+    const rawPath = request.path ?? request.url;
+
+    (request as Request & { correlationId?: string }).correlationId =
+      correlationId;
     response.setHeader('x-correlation-id', correlationId);
 
-    const rawPath = request.path ?? request.url;
     if (SKIP_LOG_PATHS.has(rawPath)) {
       return next.handle();
     }
@@ -84,10 +90,6 @@ export class RequestLoggingInterceptor implements NestInterceptor {
     const address = reqWithUser.user?.address;
 
     void this.sanitizer?.sanitizeHeaders(request.headers);
-
-    const { method } = request;
-    const url = this.sanitizer?.sanitizeUrl(request.url) ?? request.url;
-    const ip = request.ip;
 
     this.pinoLogger.log({
       msg: `→ ${method} ${url}`,
@@ -123,7 +125,6 @@ export class RequestLoggingInterceptor implements NestInterceptor {
           statusCode,
           duration,
           userId,
-          contentLength: response.getHeader('content-length'),
         };
 
         if (isErrorStatus(statusCode)) {
@@ -132,7 +133,7 @@ export class RequestLoggingInterceptor implements NestInterceptor {
           this.pinoLogger.log(logPayload);
         }
       }),
-      catchError((error: Error & { status?: number; response?: unknown }) => {
+      catchError((error: Error & { status?: number }) => {
         const duration = Date.now() - startTime;
         const statusCode = error.status ?? 500;
         const isClientError = statusCode < 500;
@@ -161,7 +162,7 @@ export class RequestLoggingInterceptor implements NestInterceptor {
           stack: !isClientError ? error.stack : undefined,
         };
 
-        if (isClientError) {
+        if (statusCode < 500) {
           this.pinoLogger.warn(logPayload);
         } else {
           this.pinoLogger.error(logPayload);

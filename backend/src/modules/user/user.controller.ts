@@ -6,7 +6,6 @@ import {
   Param,
   Body,
   UseGuards,
-  Request,
   Post,
   UseInterceptors,
   UploadedFile,
@@ -129,7 +128,7 @@ export class UserController {
   })
   @ApiResponse({
     status: 200,
-    description: 'Net worth data',
+    description: 'Net worth breakdown',
     type: NetWorthDto,
   })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
@@ -189,7 +188,6 @@ export class UserController {
 
   @Patch('me')
   @ApiOperation({ summary: 'Update the authenticated user profile' })
-  @ApiResponse({ status: 200, description: 'Profile updated' })
   @ApiBody({ type: UpdateUserDto })
   @ApiResponse({ status: 200, description: 'Profile updated' })
   @ApiResponse({ status: 400, description: 'Validation error' })

@@ -15,6 +15,7 @@ export enum ReferralStatus {
   COMPLETED = 'completed',
   REWARDED = 'rewarded',
   EXPIRED = 'expired',
+  QUARANTINED = 'quarantined',
   FRAUDULENT = 'fraudulent',
 }
 
@@ -63,6 +64,15 @@ export class Referral {
 
   @Column({ type: 'jsonb', nullable: true })
   metadata: Record<string, any> | null;
+
+  @Column({ type: 'jsonb', nullable: true })
+  fraudReasons: string[] | null;
+
+  @Column({ type: 'boolean', default: false })
+  requiresManualReview: boolean;
+
+  @Column({ type: 'timestamp', nullable: true })
+  quarantinedAt: Date | null;
 
   @CreateDateColumn()
   createdAt: Date;

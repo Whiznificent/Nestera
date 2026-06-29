@@ -20,6 +20,7 @@ interface StandardErrorResponse {
   timestamp: string;
   path: string;
   docsUrl?: string;
+  correlationId?: string;
 }
 
 const RPC_TIMEOUT_PATTERN = /request timeout after \d+ms/i;
@@ -92,8 +93,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
     const request = ctx.getRequest<Request>();
     const requestId =
       ((request as unknown as Record<string, unknown>).correlationId as
-        | string
-        | undefined) ??
+        string | undefined) ??
       (request.headers['x-correlation-id'] as string) ??
       null;
     const timestamp = new Date().toISOString();
@@ -135,6 +135,9 @@ export class AllExceptionsFilter implements ExceptionFilter {
           ? 'Soroban RPC request timed out. The network may be under load.'
           : 'All Soroban RPC endpoints are currently unavailable. Please retry later.',
         requestId,
+        correlationId:
+          (request as Request & { correlationId?: string }).correlationId ??
+          undefined,
         timestamp,
         path: request.url,
       };
@@ -156,6 +159,9 @@ export class AllExceptionsFilter implements ExceptionFilter {
         message:
           'Database connection is currently unavailable. Please try again shortly.',
         requestId,
+        correlationId:
+          (request as Request & { correlationId?: string }).correlationId ??
+          undefined,
         timestamp,
         path: request.url,
       };
@@ -215,6 +221,10 @@ export class AllExceptionsFilter implements ExceptionFilter {
     const body: StandardErrorResponse = {
       success: false,
       statusCode: status,
+      correlationId:
+        (request as Request & { correlationId?: string }).correlationId ??
+        (request.headers['x-correlation-id'] as string | undefined) ??
+        undefined,
       errorCode,
       message,
       details,
@@ -227,11 +237,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
     response.status(status).json(body);
   }
 
-  private logError(
-    request: Request,
-    status: number,
-    exception: unknown,
-  ): void {
+  private logError(request: Request, status: number, exception: unknown): void {
     const msg =
       exception instanceof Error ? exception.message : String(exception);
     const stack = exception instanceof Error ? exception.stack : undefined;

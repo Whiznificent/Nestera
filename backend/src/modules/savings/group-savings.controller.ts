@@ -21,9 +21,11 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { CreateSavingsGroupDto } from './dto/create-savings-group.dto';
 import { ContributeSavingsGroupDto } from './dto/contribute-savings-group.dto';
 import { InviteMemberDto } from './dto/invite-member.dto';
+import { RespondInvitationDto } from './dto/respond-invitation.dto';
 import { SavingsGroup } from './entities/savings-group.entity';
 import { SavingsGroupMember } from './entities/savings-group-member.entity';
 import { SavingsGroupActivity } from './entities/savings-group-activity.entity';
+import { GroupInvitation } from './entities/group-invitation.entity';
 
 @ApiTags('savings/groups')
 @Controller('savings/groups')
@@ -72,14 +74,110 @@ export class GroupSavingsController {
   @ApiResponse({
     status: 200,
     description: 'User invited successfully',
-    type: SavingsGroupMember,
+    type: GroupInvitation,
   })
   async inviteMember(
     @CurrentUser() user: { id: string },
     @Param('id') id: string,
     @Body() dto: InviteMemberDto,
-  ): Promise<{ success: boolean; data: SavingsGroupMember }> {
+  ): Promise<{ success: boolean; data: GroupInvitation }> {
     const data = await this.groupSavingsService.inviteMember(user.id, id, dto);
+    return { success: true, data };
+  }
+
+  @Post('invitations/:invitationId/accept')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Accept a group invitation' })
+  @ApiParam({ name: 'invitationId', description: 'Invitation UUID' })
+  @ApiResponse({
+    status: 200,
+    description: 'Invitation accepted',
+    type: SavingsGroupMember,
+  })
+  async acceptInvitation(
+    @CurrentUser() user: { id: string },
+    @Param('invitationId') invitationId: string,
+    @Body() dto: RespondInvitationDto,
+  ): Promise<{ success: boolean; data: SavingsGroupMember }> {
+    const data = await this.groupSavingsService.acceptInvitation(
+      invitationId,
+      user.id,
+      dto,
+    );
+    return { success: true, data };
+  }
+
+  @Post('invitations/:invitationId/reject')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Reject a group invitation' })
+  @ApiParam({ name: 'invitationId', description: 'Invitation UUID' })
+  @ApiResponse({
+    status: 200,
+    description: 'Invitation rejected',
+    type: GroupInvitation,
+  })
+  async rejectInvitation(
+    @CurrentUser() user: { id: string },
+    @Param('invitationId') invitationId: string,
+    @Body() dto: RespondInvitationDto,
+  ): Promise<{ success: boolean; data: GroupInvitation }> {
+    const data = await this.groupSavingsService.rejectInvitation(
+      invitationId,
+      user.id,
+      dto,
+    );
+    return { success: true, data };
+  }
+
+  @Post(':id/invitations/:invitationId/cancel')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Cancel a pending invitation' })
+  @ApiParam({ name: 'id', description: 'Group UUID' })
+  @ApiParam({ name: 'invitationId', description: 'Invitation UUID' })
+  @ApiResponse({
+    status: 200,
+    description: 'Invitation cancelled',
+    type: GroupInvitation,
+  })
+  async cancelInvitation(
+    @CurrentUser() user: { id: string },
+    @Param('id') id: string,
+    @Param('invitationId') invitationId: string,
+  ): Promise<{ success: boolean; data: GroupInvitation }> {
+    const data = await this.groupSavingsService.cancelInvitation(
+      invitationId,
+      user.id,
+    );
+    return { success: true, data };
+  }
+
+  @Get(':id/invitations')
+  @ApiOperation({ summary: 'List all invitations for a group' })
+  @ApiParam({ name: 'id', description: 'Group UUID' })
+  @ApiResponse({
+    status: 200,
+    description: 'List of invitations',
+    type: [GroupInvitation],
+  })
+  async getInvitations(
+    @CurrentUser() user: { id: string },
+    @Param('id') id: string,
+  ): Promise<{ success: boolean; data: GroupInvitation[] }> {
+    const data = await this.groupSavingsService.getInvitations(id, user.id);
+    return { success: true, data };
+  }
+
+  @Get('invitations/mine')
+  @ApiOperation({ summary: 'Get my pending invitations' })
+  @ApiResponse({
+    status: 200,
+    description: 'My invitations',
+    type: [GroupInvitation],
+  })
+  async getMyInvitations(
+    @CurrentUser() user: { id: string },
+  ): Promise<{ success: boolean; data: GroupInvitation[] }> {
+    const data = await this.groupSavingsService.getMyInvitations(user.id);
     return { success: true, data };
   }
 

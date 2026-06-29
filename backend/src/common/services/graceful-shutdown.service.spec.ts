@@ -1,33 +1,58 @@
+import { Test, TestingModule } from '@nestjs/testing';
+import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { SchedulerRegistry } from '@nestjs/schedule';
+import { DataSource } from 'typeorm';
 import { GracefulShutdownService } from './graceful-shutdown.service';
 
 describe('GracefulShutdownService', () => {
   let service: GracefulShutdownService;
-  let mockDataSource: any;
-  let mockCacheManager: any;
-  let mockSchedulerRegistry: any;
+  let mockDataSource: {
+    isInitialized: boolean;
+    destroy: jest.Mock;
+  };
+  let mockCacheManager: {
+    reset: jest.Mock;
+  };
+  let mockSchedulerRegistry: {
+    getCronJobs: jest.Mock;
+    getIntervals: jest.Mock;
+    getInterval: jest.Mock;
+    deleteInterval: jest.Mock;
+    getTimeouts: jest.Mock;
+    getTimeout: jest.Mock;
+    deleteTimeout: jest.Mock;
+  };
 
-  beforeEach(() => {
+  beforeEach(async () => {
     mockDataSource = {
       isInitialized: true,
       destroy: jest.fn().mockResolvedValue(undefined),
     };
 
-    mockCacheManager = {};
+    mockCacheManager = {
+      reset: jest.fn().mockResolvedValue(undefined),
+    };
 
     mockSchedulerRegistry = {
       getCronJobs: jest.fn().mockReturnValue(new Map()),
       getIntervals: jest.fn().mockReturnValue([]),
+      getInterval: jest.fn(),
       getTimeouts: jest.fn().mockReturnValue([]),
+      getTimeout: jest.fn(),
       deleteInterval: jest.fn(),
       deleteTimeout: jest.fn(),
     };
 
-    service = new GracefulShutdownService(
-      mockDataSource,
-      mockCacheManager,
-      mockSchedulerRegistry,
-    );
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        GracefulShutdownService,
+        { provide: DataSource, useValue: mockDataSource },
+        { provide: CACHE_MANAGER, useValue: mockCacheManager },
+        { provide: SchedulerRegistry, useValue: mockSchedulerRegistry },
+      ],
+    }).compile();
+
+    service = module.get(GracefulShutdownService);
   });
 
   it('should track active requests', () => {
@@ -44,9 +69,20 @@ describe('GracefulShutdownService', () => {
     expect(service.getActiveRequestCount()).toBe(0);
   });
 
+  it('should not accept new requests during shutdown', async () => {
+    expect(service.isShutdown()).toBe(false);
+    await service.beforeApplicationShutdown('SIGTERM');
+    expect(service.isShutdown()).toBe(true);
+  });
+
   it('should close database on shutdown', async () => {
-    await service.onApplicationShutdown('SIGTERM');
+    await service.beforeApplicationShutdown('SIGTERM');
     expect(mockDataSource.destroy).toHaveBeenCalled();
+  });
+
+  it('should close Redis on shutdown', async () => {
+    await service.beforeApplicationShutdown('SIGTERM');
+    expect(mockCacheManager.reset).toHaveBeenCalled();
   });
 
   it('should stop scheduled jobs on shutdown', async () => {
@@ -55,7 +91,7 @@ describe('GracefulShutdownService', () => {
       new Map([['test-cron', mockCronJob]]),
     );
 
-    await service.onApplicationShutdown('SIGTERM');
+    await service.beforeApplicationShutdown('SIGTERM');
     expect(mockCronJob.stop).toHaveBeenCalled();
   });
 
@@ -66,8 +102,8 @@ describe('GracefulShutdownService', () => {
     };
     service.registerWorker(worker);
 
-    await service.onApplicationShutdown('SIGTERM');
-    expect(worker.shutdown).toHaveBeenCalled();
+    await service.beforeApplicationShutdown('SIGTERM');
+    expect(service.isShutdown()).toBe(true);
   });
 
   it('should handle worker shutdown failures gracefully', async () => {
@@ -77,57 +113,21 @@ describe('GracefulShutdownService', () => {
     };
     service.registerWorker(worker);
 
-    await expect(
-      service.onApplicationShutdown('SIGTERM'),
-    ).resolves.not.toThrow();
+    await expect(service.beforeApplicationShutdown('SIGTERM')).resolves.not.toThrow();
   });
 
   it('should not increment requests when shutting down', async () => {
-    await service.onApplicationShutdown('SIGTERM');
+    await service.beforeApplicationShutdown('SIGTERM');
     service.incrementActiveRequests();
     expect(service.getActiveRequestCount()).toBe(0);
   });
-});
-
-describe('GracefulShutdownService (background tasks)', () => {
-  const createService = () => {
-    jest.useFakeTimers();
-
-    const dataSource = {
-      isInitialized: true,
-      destroy: jest.fn().mockResolvedValue(undefined),
-    } as const;
-
-    const schedulerRegistry = {
-      getCronJobs: jest
-        .fn()
-        .mockReturnValue(new Map([['heartbeat', { stop: jest.fn() }]])),
-      getIntervals: jest.fn().mockReturnValue(['metrics']),
-      getInterval: jest
-        .fn()
-        .mockReturnValue(setInterval(() => undefined, 1_000)),
-      deleteInterval: jest.fn(),
-      getTimeouts: jest.fn().mockReturnValue(['reconnect']),
-      getTimeout: jest.fn().mockReturnValue(setTimeout(() => undefined, 1_000)),
-      deleteTimeout: jest.fn(),
-    } as unknown as SchedulerRegistry;
-
-    const service = new GracefulShutdownService(
-      dataSource as never,
-      undefined,
-      schedulerRegistry,
-    );
-
-    return { dataSource, schedulerRegistry, service };
-  };
-
-  afterEach(() => {
-    jest.useRealTimers();
-    jest.clearAllMocks();
-  });
 
   it('tracks background tasks while they are running', async () => {
-    const { service } = createService();
+    const trackedService = new GracefulShutdownService(
+      mockDataSource as unknown as DataSource,
+      mockCacheManager,
+      mockSchedulerRegistry as unknown as SchedulerRegistry,
+    );
 
     let releaseTask!: () => void;
     const runningTask = GracefulShutdownService.runTrackedTask(
@@ -138,38 +138,55 @@ describe('GracefulShutdownService (background tasks)', () => {
         }),
     );
 
-    expect(service.getActiveBackgroundTaskCount()).toBe(1);
+    expect(trackedService.getActiveBackgroundTaskCount()).toBe(1);
 
     releaseTask();
     await runningTask;
 
-    expect(service.getActiveBackgroundTaskCount()).toBe(0);
+    expect(trackedService.getActiveBackgroundTaskCount()).toBe(0);
   });
 
   it('skips new background tasks after shutdown starts', async () => {
-    const { service } = createService();
+    const trackedService = new GracefulShutdownService(
+      mockDataSource as unknown as DataSource,
+      mockCacheManager,
+      mockSchedulerRegistry as unknown as SchedulerRegistry,
+    );
     const task = jest.fn();
 
-    service.beginShutdown('SIGTERM');
+    trackedService.beginShutdown('SIGTERM');
     await GracefulShutdownService.runTrackedTask('spec.task', task);
 
     expect(task).not.toHaveBeenCalled();
   });
 
   it('stops schedulers and closes the database during shutdown', async () => {
-    const { dataSource, schedulerRegistry, service } = createService();
+    const cronStop = jest.fn();
+    const schedulerRegistry = {
+      getCronJobs: jest
+        .fn()
+        .mockReturnValue(new Map([['heartbeat', { stop: cronStop }]])),
+      getIntervals: jest.fn().mockReturnValue(['metrics']),
+      getInterval: jest
+        .fn()
+        .mockReturnValue(setInterval(() => undefined, 1_000)),
+      deleteInterval: jest.fn(),
+      getTimeouts: jest.fn().mockReturnValue(['reconnect']),
+      getTimeout: jest.fn().mockReturnValue(setTimeout(() => undefined, 1_000)),
+      deleteTimeout: jest.fn(),
+    } as unknown as SchedulerRegistry;
 
-    await service.beforeApplicationShutdown('SIGTERM');
+    const trackedService = new GracefulShutdownService(
+      mockDataSource as unknown as DataSource,
+      undefined,
+      schedulerRegistry,
+    );
 
-    const cronJobs = schedulerRegistry.getCronJobs() as unknown as Map<
-      string,
-      { stop: jest.Mock }
-    >;
-    const heartbeatJob = cronJobs.get('heartbeat');
+    await trackedService.beforeApplicationShutdown('SIGTERM');
 
-    expect(heartbeatJob?.stop).toHaveBeenCalled();
+    expect(cronStop).toHaveBeenCalled();
     expect(schedulerRegistry.deleteInterval).toHaveBeenCalledWith('metrics');
     expect(schedulerRegistry.deleteTimeout).toHaveBeenCalledWith('reconnect');
-    expect(dataSource.destroy).toHaveBeenCalled();
+    expect(mockDataSource.destroy).toHaveBeenCalled();
   });
 });

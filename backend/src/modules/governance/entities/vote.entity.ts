@@ -5,7 +5,7 @@ import {
   CreateDateColumn,
   ManyToOne,
   JoinColumn,
-  Index,
+  Unique,
 } from 'typeorm';
 import { GovernanceProposal } from './governance-proposal.entity';
 
@@ -15,8 +15,16 @@ export enum VoteDirection {
   ABSTAIN = 'ABSTAIN',
 }
 
+/**
+ * Named unique constraint on the concrete columns (walletAddress, proposalId),
+ * not on the relation object.  Using the column names guarantees the DB-level
+ * UNIQUE constraint is emitted correctly regardless of TypeORM version.
+ *
+ * A PostgreSQL UNIQUE constraint implicitly creates a B-tree index, so no
+ * separate @Index is needed for query performance.
+ */
 @Entity('votes')
-@Index(['walletAddress', 'proposal'], { unique: true })
+@Unique('uq_vote_wallet_proposal', ['walletAddress', 'proposalId'])
 export class Vote {
   @PrimaryGeneratedColumn('uuid')
   id: string;

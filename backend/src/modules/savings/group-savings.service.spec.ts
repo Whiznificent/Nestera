@@ -14,13 +14,23 @@ import {
   SavingsGroupActivity,
   SavingsGroupActivityType,
 } from './entities/savings-group-activity.entity';
-import { ConflictException, ForbiddenException } from '@nestjs/common';
+import {
+  GroupInvitation,
+  InvitationStatus,
+} from './entities/group-invitation.entity';
+import {
+  ConflictException,
+  ForbiddenException,
+  BadRequestException,
+  NotFoundException,
+} from '@nestjs/common';
 
 describe('GroupSavingsService', () => {
   let service: GroupSavingsService;
   let groupRepository: any;
   let memberRepository: any;
   let activityRepository: any;
+  let invitationRepository: any;
   let dataSource: any;
 
   beforeEach(async () => {
@@ -40,6 +50,14 @@ describe('GroupSavingsService', () => {
       create: jest.fn(),
       save: jest.fn(),
       find: jest.fn(),
+    };
+    invitationRepository = {
+      findOne: jest.fn(),
+      find: jest.fn(),
+      create: jest.fn((data: any) => data),
+      save: jest.fn((data: any) =>
+        Promise.resolve({ ...data, id: 'invitation-generated-id' }),
+      ),
     };
     dataSource = {
       transaction: jest.fn((cb) =>
@@ -65,6 +83,10 @@ describe('GroupSavingsService', () => {
         {
           provide: getRepositoryToken(SavingsGroupActivity),
           useValue: activityRepository,
+        },
+        {
+          provide: getRepositoryToken(GroupInvitation),
+          useValue: invitationRepository,
         },
         { provide: DataSource, useValue: dataSource },
       ],
@@ -120,7 +142,7 @@ describe('GroupSavingsService', () => {
       const adminId = 'admin-1';
       const groupId = 'group-1';
       const targetUserId = 'user-3';
-      const dto = { userId: targetUserId };
+      const dto = { userId: targetUserId, message: 'Join us!' };
 
       groupRepository.findOneBy.mockResolvedValue({ id: groupId });
       memberRepository.findOneBy
@@ -129,11 +151,19 @@ describe('GroupSavingsService', () => {
           role: SavingsGroupRole.ADMIN,
         })
         .mockResolvedValueOnce(null);
+      invitationRepository.findOne.mockResolvedValue(null);
+      invitationRepository.create.mockReturnValueOnce({
+        groupId,
+        inviterId: adminId,
+        inviteeId: targetUserId,
+        message: 'Join us!',
+        status: InvitationStatus.PENDING,
+      });
 
       const result = await service.inviteMember(adminId, groupId, dto);
 
-      expect(result.userId).toBe(targetUserId);
-      expect(result.role).toBe(SavingsGroupRole.MEMBER);
+      expect(result.inviteeId).toBe(targetUserId);
+      expect(result.status).toBe(InvitationStatus.PENDING);
     });
 
     it('should throw ForbiddenException if non-admin invites', async () => {
@@ -146,6 +176,82 @@ describe('GroupSavingsService', () => {
       await expect(
         service.inviteMember('user-1', 'group-1', { userId: 'user-2' }),
       ).rejects.toThrow(ForbiddenException);
+    });
+
+    it('should throw ConflictException if pending invitation exists', async () => {
+      const adminId = 'admin-1';
+      const groupId = 'group-1';
+      const targetUserId = 'user-3';
+
+      groupRepository.findOneBy.mockResolvedValue({ id: groupId });
+      memberRepository.findOneBy
+        .mockResolvedValueOnce({
+          id: 'admin-member',
+          role: SavingsGroupRole.ADMIN,
+        })
+        .mockResolvedValueOnce(null);
+      invitationRepository.findOne.mockResolvedValue({
+        id: 'invite-1',
+        status: InvitationStatus.PENDING,
+      });
+
+      await expect(
+        service.inviteMember(adminId, groupId, { userId: targetUserId }),
+      ).rejects.toThrow(ConflictException);
+    });
+  });
+
+  describe('acceptInvitation', () => {
+    it('should accept a pending invitation and add as member', async () => {
+      const userId = 'user-3';
+      const invitationId = 'invite-1';
+      const groupId = 'group-1';
+
+      invitationRepository.findOne.mockResolvedValue({
+        id: invitationId,
+        groupId,
+        inviteeId: userId,
+        status: InvitationStatus.PENDING,
+        expiresAt: new Date(Date.now() + 86400000),
+        inviterId: 'admin-1',
+      });
+      groupRepository.findOneBy.mockResolvedValue({
+        id: groupId,
+        status: SavingsGroupStatus.OPEN,
+      });
+
+      const result = await service.acceptInvitation(invitationId, userId);
+
+      expect(result.groupId).toBe(groupId);
+      expect(result.userId).toBe(userId);
+    });
+
+    it('should throw NotFoundException for invalid invitation', async () => {
+      invitationRepository.findOne.mockResolvedValue(null);
+
+      await expect(
+        service.acceptInvitation('invalid-id', 'user-3'),
+      ).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('rejectInvitation', () => {
+    it('should reject a pending invitation', async () => {
+      const userId = 'user-3';
+      const invitationId = 'invite-1';
+
+      invitationRepository.findOne.mockResolvedValue({
+        id: invitationId,
+        inviteeId: userId,
+        status: InvitationStatus.PENDING,
+      });
+      invitationRepository.save.mockImplementation((data) =>
+        Promise.resolve(data),
+      );
+
+      const result = await service.rejectInvitation(invitationId, userId);
+
+      expect(result.status).toBe(InvitationStatus.REJECTED);
     });
   });
 

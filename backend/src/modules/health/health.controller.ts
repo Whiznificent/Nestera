@@ -33,7 +33,10 @@ import {
 } from './indicators/external-services.health';
 import { StorageHealthIndicator } from './indicators/storage.health';
 import { SystemHealthIndicator } from './indicators/system.health';
-import { HealthHistoryService } from './health-history.service';
+import {
+  HealthCheckResult,
+  HealthHistoryService,
+} from './health-history.service';
 
 @ApiTags('Health')
 @Controller('health')
@@ -179,7 +182,13 @@ export class HealthController {
     const allHealthy = healthyCount === services.length;
     const timestamp = new Date();
 
-    const historyEntries = checks.map((check, index) => {
+    const normalizeStatus = (status: string): HealthCheckResult['status'] => {
+      if (status === 'up') return 'up';
+      if (status === 'degraded') return 'degraded';
+      return 'down';
+    };
+
+    const historyEntries: HealthCheckResult[] = checks.map((check, index) => {
       const service = services[index];
       if (check.status === 'fulfilled') {
         const entry = check.value[service] as
@@ -188,12 +197,7 @@ export class HealthController {
         const status = (entry?.status as string) ?? 'up';
         return {
           service,
-          status:
-            status === 'up'
-              ? 'up'
-              : status === 'degraded'
-                ? 'degraded'
-                : 'down',
+          status: normalizeStatus(status),
           responseTime: parseInt(String(entry?.responseTime ?? '0'), 10) || 0,
           timestamp,
           error: entry?.message as string | undefined,
@@ -201,7 +205,7 @@ export class HealthController {
       }
       return {
         service,
-        status: 'down' as const,
+        status: 'down',
         responseTime: 0,
         timestamp,
         error: check.reason?.message || 'Unknown error',

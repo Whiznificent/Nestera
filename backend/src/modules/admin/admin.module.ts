@@ -18,7 +18,6 @@ import { CircuitBreakerController } from './circuit-breaker.controller';
 import { AdminDisputesController } from './admin-disputes.controller';
 import { AdminAuditLogsController } from './admin-audit-logs.controller';
 import { AdminNotificationsController } from './admin-notifications.controller';
-
 import { AdminTransactionsController } from './admin-transactions.controller';
 
 import { AdminUsersService } from './admin-users.service';
@@ -74,6 +73,8 @@ import { JobQueueModule } from '../job-queue/job-queue.module';
     AdminUsersController,
     AdminWithdrawalController,
     AdminNotificationsController,
+    AdminAuditLogsController,
+    AdminTransactionsController,
   ],
   providers: [
     AdminUsersService,

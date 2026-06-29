@@ -3,12 +3,18 @@ import {
   NotFoundException,
   ConflictException,
   Logger,
+  Inject,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { CACHE_MANAGER } from '@nestjs/cache-manager';
+import { Cache } from 'cache-manager';
 import { FeatureFlag } from './entities/feature-flag.entity';
 import { CreateFlagDto } from './dto/create-flag.dto';
 import { UpdateFlagDto } from './dto/update-flag.dto';
+
+const FEATURE_FLAG_CACHE_PREFIX = 'feature-flag:';
+const FEATURE_FLAG_CACHE_TTL_MS = 60_000;
 
 @Injectable()
 export class FeatureFlagsService {
@@ -17,6 +23,7 @@ export class FeatureFlagsService {
   constructor(
     @InjectRepository(FeatureFlag)
     private readonly flagRepository: Repository<FeatureFlag>,
+    @Inject(CACHE_MANAGER) private readonly cacheManager: Cache,
   ) {}
 
   async findAll(): Promise<FeatureFlag[]> {
@@ -24,8 +31,19 @@ export class FeatureFlagsService {
   }
 
   async findOne(key: string): Promise<FeatureFlag> {
+    const cached = await this.cacheManager.get<FeatureFlag>(this.cacheKey(key));
+    if (cached) {
+      return cached;
+    }
+
     const flag = await this.flagRepository.findOne({ where: { key } });
     if (!flag) throw new NotFoundException(`Feature flag "${key}" not found`);
+
+    await this.cacheManager.set(
+      this.cacheKey(key),
+      flag,
+      FEATURE_FLAG_CACHE_TTL_MS,
+    );
     return flag;
   }
 
@@ -43,6 +61,7 @@ export class FeatureFlagsService {
       forceDisabled: dto.forceDisabled ?? false,
     });
     const saved = await this.flagRepository.save(flag);
+    await this.invalidateCache(saved.key);
     this.logger.log(`Feature flag created: ${saved.key}`);
     return saved;
   }
@@ -51,6 +70,7 @@ export class FeatureFlagsService {
     const flag = await this.findOne(key);
     Object.assign(flag, dto);
     const saved = await this.flagRepository.save(flag);
+    await this.invalidateCache(key);
     this.logger.log(`Feature flag updated: ${key}`, {
       changes: Object.keys(dto),
     });
@@ -62,6 +82,7 @@ export class FeatureFlagsService {
     flag.enabled = !flag.enabled;
     flag.forceDisabled = false;
     const saved = await this.flagRepository.save(flag);
+    await this.invalidateCache(key);
     this.logger.log(`Feature flag toggled: ${key} → ${saved.enabled}`);
     return saved;
   }
@@ -69,7 +90,25 @@ export class FeatureFlagsService {
   async remove(key: string): Promise<void> {
     const flag = await this.findOne(key);
     await this.flagRepository.remove(flag);
+    await this.invalidateCache(key);
     this.logger.log(`Feature flag deleted: ${key}`);
+  }
+
+  async isEnabled(
+    key: string,
+    context: { address?: string; network?: string; segments?: string[] },
+  ): Promise<boolean> {
+    const result = await this.evaluate(key, context);
+    if (typeof result.value === 'boolean') {
+      return result.value;
+    }
+    if (typeof result.value === 'number') {
+      return result.value > 0;
+    }
+    if (typeof result.value === 'string') {
+      return result.value.length > 0 && result.value !== 'false';
+    }
+    return Boolean(result.value);
   }
 
   /**
@@ -154,5 +193,13 @@ export class FeatureFlagsService {
       hash = hash & hash;
     }
     return Math.abs(hash) % 100;
+  }
+
+  private cacheKey(key: string): string {
+    return `${FEATURE_FLAG_CACHE_PREFIX}${key}`;
+  }
+
+  private async invalidateCache(key: string): Promise<void> {
+    await this.cacheManager.del(this.cacheKey(key));
   }
 }

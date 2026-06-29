@@ -18,6 +18,11 @@ import { User } from '../user/entities/user.entity';
 import { ReportSchedule } from '../reports/entities/report-schedule.entity';
 import { StorageModule } from '../storage/storage.module';
 import { ReportsModule } from '../reports/reports.module';
+import { AuditLogExportProcessor } from './processors/audit-log-export.processor';
+import { JobQueueService } from './job-queue.service';
+import { JobQueueController } from './job-queue.controller';
+import { DisputeEvidence } from '../disputes/entities/dispute-evidence.entity';
+import { AuditLog } from '../../common/entities/audit-log.entity';
 
 const defaultJobOptions = {
   attempts: 3,
@@ -38,6 +43,8 @@ const defaultJobOptions = {
       User,
       ReportSchedule,
     ]),
+    TypeOrmModule.forFeature([Notification, AuditLog]),
+    TypeOrmModule.forFeature([DisputeEvidence]),
     BullModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
@@ -81,6 +88,16 @@ const defaultJobOptions = {
       { name: QUEUE_NAMES.REPORTS, defaultJobOptions },
       { name: QUEUE_NAMES.DISPUTE_EVIDENCE, defaultJobOptions },
       { name: QUEUE_NAMES.AVATAR, defaultJobOptions },
+      {
+        name: QUEUE_NAMES.AUDIT_LOG_EXPORT,
+        defaultJobOptions: {
+          ...defaultJobOptions,
+          attempts: 3,
+          backoff: { type: 'exponential' as const, delay: 2000 },
+          removeOnComplete: { count: 100 },
+          removeOnFail: { count: 500 },
+        },
+      },
     ),
   ],
   controllers: [JobQueueController],
@@ -92,6 +109,7 @@ const defaultJobOptions = {
     ReportProcessor,
     DisputeEvidenceProcessor,
     AvatarProcessor,
+    AuditLogExportProcessor,
   ],
   exports: [JobQueueService, BullModule],
 })

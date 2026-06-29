@@ -47,6 +47,17 @@ export interface AvatarJobData {
   storagePath: string;
   mimeType: string;
   originalFilename: string;
+export interface AuditLogExportJobData {
+  filters: {
+    actor?: string;
+    action?: string;
+    resourceType?: string;
+    resourceId?: string;
+    fromDate?: string;
+    toDate?: string;
+  };
+  format: 'csv' | 'json';
+  requestedBy: string;
 }
 
 @Injectable()
@@ -66,6 +77,8 @@ export class JobQueueService {
     private readonly disputeEvidenceQueue: Queue,
     @InjectQueue(QUEUE_NAMES.AVATAR)
     private readonly avatarQueue: Queue,
+    @InjectQueue(QUEUE_NAMES.AUDIT_LOG_EXPORT)
+    private readonly auditLogExportQueue: Queue,
   ) {}
 
   async addNotificationJob(data: NotificationJobData, opts?: JobsOptions) {
@@ -144,6 +157,23 @@ export class JobQueueService {
     });
     this.logger.debug(
       `Queued avatar processing job ${job.id} for uploadId=${data.uploadId} userId=${data.userId}`,
+  async addAuditLogExportJob(
+    data: AuditLogExportJobData,
+    opts?: JobsOptions,
+  ) {
+    const job = await this.auditLogExportQueue.add(
+      JOB_NAMES.EXPORT_AUDIT_LOGS,
+      data,
+      {
+        ...opts,
+        attempts: 3,
+        backoff: { type: 'exponential', delay: 2000 },
+        removeOnComplete: { count: 100 },
+        removeOnFail: { count: 500 },
+      },
+    );
+    this.logger.debug(
+      `Queued audit log export job ${job.id} for admin ${data.requestedBy}`,
     );
     return job;
   }
@@ -160,7 +190,9 @@ export class JobQueueService {
       queue.getDelayedCount(),
     ]);
 
-    return { queueName, waiting, active, completed, failed, delayed };
+    const dlqSize = failed;
+
+    return { queueName, waiting, active, completed, failed, delayed, dlqSize };
   }
 
   async getAllQueuesStatus() {
@@ -169,6 +201,12 @@ export class JobQueueService {
       queues.map((name) => this.getQueueStatus(name)),
     );
     return statuses.filter(Boolean);
+  }
+
+  async getDLQSize(queueName: string): Promise<number> {
+    const queue = this.getQueue(queueName);
+    if (!queue) return 0;
+    return queue.getFailedCount();
   }
 
   async getFailedJobs(queueName: string, start = 0, end = 20) {
@@ -196,6 +234,7 @@ export class JobQueueService {
       [QUEUE_NAMES.REPORTS]: this.reportQueue,
       [QUEUE_NAMES.DISPUTE_EVIDENCE]: this.disputeEvidenceQueue,
       [QUEUE_NAMES.AVATAR]: this.avatarQueue,
+      [QUEUE_NAMES.AUDIT_LOG_EXPORT]: this.auditLogExportQueue,
     };
     return map[queueName] || null;
   }

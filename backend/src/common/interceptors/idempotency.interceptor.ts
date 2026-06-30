@@ -27,10 +27,31 @@ interface StoredIdempotencyRecord {
   statusCode: number;
   body: unknown;
   completedAt: string;
+  /**
+   * Absolute expiry time of the record in unix-milliseconds.  Computed
+   * from `completedAt + configured TTL` so that the background cleanup
+   * job can identify records whose logical window has elapsed even if
+   * Redis TTL is misconfigured or has been bypassed.
+   *
+   * Optional for backward compatibility with records written before
+   * the cleanup feature was introduced; the cleanup job treats absent
+   * `expiresAt` as conservatively-active (never deleted by the job).
+   */
+  expiresAt?: number;
 }
 
 const LOCK_SUFFIX = ':lock';
 const LOCK_TTL_MS = 30_000;
+export { LOCK_SUFFIX };
+
+/**
+ * Window during which an expired-by-`expiresAt` record is still kept in
+ * Redis so the cleanup job can observe, log, and remove it.  Without this
+ * grace window a strongly misconfigured Redis TTL could delete records
+ * before we have a chance to count them — defeating the cleanup
+ * observability goal.
+ */
+const EXPIRES_AT_GRACE_MS = 60_000;
 
 /**
  * Infers a related entity type from the route path for admin observability.
@@ -153,13 +174,21 @@ export class IdempotencyInterceptor implements NestInterceptor {
     return next.handle().pipe(
       tap(async (body) => {
         try {
+          const completedAt = new Date();
           const record: StoredIdempotencyRecord = {
             payloadHash,
             statusCode: response.statusCode,
             body,
-            completedAt: new Date().toISOString(),
+            completedAt: completedAt.toISOString(),
+            // Track logical expiry so the background cleanup job can
+            // remove orphaned records even when Redis TTL is misconfigured
+            // or absent.  Use the configured TTL (the cache-store TTL is
+            // the same value, plus a small grace window in the cache key
+            // so that an expired-but-still-resident record is observable
+            // by the cleanup job — see EXPIRES_AT_GRACE_MS).
+            expiresAt: completedAt.getTime() + ttlMs,
           };
-          await this.cache.set(cacheKey, record, ttlMs);
+          await this.cache.set(cacheKey, record, ttlMs + EXPIRES_AT_GRACE_MS);
         } finally {
           await this.releaseLock(lockKey);
         }

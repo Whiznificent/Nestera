@@ -203,6 +203,46 @@ export default () => ({
     indexerTtlMs: parseInt(process.env.INDEXER_LOCK_TTL_MS || '25000', 10),
     replayTtlMs: parseInt(process.env.REPLAY_LOCK_TTL_MS || '120000', 10),
   },
+  idempotency: {
+    /**
+     * Enable the periodic background cleanup job for expired idempotency
+     * records.  Redis TTL is normally authoritative, but the cleanup job
+     * defends against TTL misconfiguration, Redis eviction policies, and
+     * records whose explicit `expiresAt` has passed (see issue #Cleanup).
+     */
+    cleanupEnabled:
+      process.env.IDEMPOTENCY_CLEANUP_ENABLED !== 'false',
+    /**
+     * Cron expression for the cleanup job.  Default is hourly to keep
+     * per-run work bounded; can be tightened in production via env.
+     */
+    cleanupCronSchedule:
+      process.env.IDEMPOTENCY_CLEANUP_CRON || '0 * * * *',
+    /**
+     * Maximum number of records processed per cleanup run.  Keeps the
+     * job bursty-safe even on installations with many in-flight keys.
+     */
+    cleanupBatchSize: parseInt(
+      process.env.IDEMPOTENCY_CLEANUP_BATCH_SIZE || '500',
+      10,
+    ),
+    /**
+     * HOW_MANY hint for SCAN — Redis returns up to this many keys in
+     * one round-trip but may return more or fewer.  Tune for throughput.
+     */
+    cleanupScanCount: parseInt(
+      process.env.IDEMPOTENCY_CLEANUP_SCAN_COUNT || '200',
+      10,
+    ),
+    /**
+     * Lock TTL for the single-instance cleanup guard.  Must exceed
+     * expected maximum cleanup duration to avoid mid-run lock loss.
+     */
+    cleanupLockTtlMs: parseInt(
+      process.env.IDEMPOTENCY_CLEANUP_LOCK_TTL_MS || '120000',
+      10,
+    ),
+  },
   blockchainReplay: {
     maxLedgerRange: parseInt(
       process.env.BLOCKCHAIN_REPLAY_MAX_LEDGER_RANGE || '10000',

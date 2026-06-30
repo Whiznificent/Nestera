@@ -316,4 +316,8 @@ export default () => ({
     defaultTenantId: process.env.DEFAULT_TENANT_ID || 'default',
     defaultTenantSlug: process.env.DEFAULT_TENANT_SLUG || 'default',
   },
+  testMode: {
+    enabled: process.env.TEST_MODE === 'true',
+    stellarFixtures: process.env.TEST_MODE_STELLAR_FIXTURES,
+  },
 });

@@ -18,10 +18,15 @@ import { AuditLog } from './entities/audit-log.entity';
 import { Tenant } from './entities/tenant.entity';
 import { DataScopeService } from './services/data-scope.service';
 import { DistributedLockModule } from './distributed-lock/distributed-lock.module';
+import { TestModeModule } from './test-mode/test-mode.module';
 
 @Global()
 @Module({
-  imports: [CacheModule, TypeOrmModule.forFeature([AuditLog, Tenant])],
+  imports: [
+    CacheModule,
+    TypeOrmModule.forFeature([AuditLog, Tenant]),
+    TestModeModule,
+  ],
   providers: [
     RateLimitMonitorService,
     IdempotencyMonitorService,

@@ -15,8 +15,11 @@ export function IsISODate(validationOptions?: ValidationOptions) {
         validate(value: unknown): boolean {
           if (typeof value !== 'string') return false;
           const date = new Date(value);
-          return !isNaN(date.getTime()) && value === date.toISOString().split('T')[0] ||
-            /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$/.test(value);
+          return (
+            (!isNaN(date.getTime()) &&
+              value === date.toISOString().split('T')[0]) ||
+            /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$/.test(value)
+          );
         },
         defaultMessage(args: ValidationArguments): string {
           return `${args.property} must be a valid ISO 8601 date string (YYYY-MM-DD or YYYY-MM-DDTHH:mm:ssZ)`;
@@ -39,7 +42,9 @@ export function IsDateRange(
       constraints: [startField],
       validator: {
         validate(value: unknown, args: ValidationArguments): boolean {
-          const startValue = (args.object as Record<string, unknown>)[args.constraints[0]];
+          const startValue = (args.object as Record<string, unknown>)[
+            args.constraints[0]
+          ];
           if (!value || !startValue) return true;
           return new Date(value as string) >= new Date(startValue as string);
         },

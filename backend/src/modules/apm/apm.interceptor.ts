@@ -23,7 +23,7 @@ export class ApmInterceptor implements NestInterceptor {
     const startTime = Date.now();
 
     const incomingContext = this.tracingService.parseTraceContext(
-      request.headers as Record<string, string | string[] | undefined>,
+      request.headers,
     );
     const traceCtx = this.tracingService.createTraceContext(
       incomingContext || undefined,
@@ -37,11 +37,14 @@ export class ApmInterceptor implements NestInterceptor {
         'http.url': request.url,
         'http.route': request.path,
         'http.user_agent': (request.headers['user-agent'] as string) || '',
-        'component': 'http',
+        component: 'http',
       },
     );
 
-    response.setHeader('traceparent', this.tracingService.buildTraceparentHeader(traceCtx));
+    response.setHeader(
+      'traceparent',
+      this.tracingService.buildTraceparentHeader(traceCtx),
+    );
     response.setHeader('X-Trace-Id', traceCtx.traceId);
     (request as any).traceContext = traceCtx;
     (request as any).apmSpan = span;
@@ -55,14 +58,24 @@ export class ApmInterceptor implements NestInterceptor {
 
         this.tracingService.addSpanTag(span, 'http.status_code', statusCode);
         this.tracingService.finishSpan(span);
-        this.apmService.trackHttpRequest(request.method, route, statusCode, duration);
+        this.apmService.trackHttpRequest(
+          request.method,
+          route,
+          statusCode,
+          duration,
+        );
       }),
       catchError((error: Error) => {
         const duration = Date.now() - startTime;
         const statusCode = (error as any).status || 500;
 
         this.tracingService.finishSpan(span, error);
-        this.apmService.trackHttpRequest(request.method, route, statusCode, duration);
+        this.apmService.trackHttpRequest(
+          request.method,
+          route,
+          statusCode,
+          duration,
+        );
         this.apmService.trackError(error, {
           route,
           method: request.method,
@@ -78,7 +91,9 @@ export class ApmInterceptor implements NestInterceptor {
   private getRoutePattern(request: Request): string {
     const route = (request as any).route;
     if (route?.path) {
-      return request.path.replace(/\/[0-9a-f-]{36}/gi, '/:id').replace(/\/\d+/g, '/:id');
+      return request.path
+        .replace(/\/[0-9a-f-]{36}/gi, '/:id')
+        .replace(/\/\d+/g, '/:id');
     }
     return request.path;
   }

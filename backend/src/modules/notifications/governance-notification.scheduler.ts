@@ -6,7 +6,7 @@ import { NotificationsService } from './notifications.service';
 import { NotificationType } from './entities/notification.entity';
 import { PendingNotification } from './entities/pending-notification.entity';
 import {
-  NotificationPreference,
+  UserPreference,
   DigestFrequency,
 } from './entities/notification-preference.entity';
 import { User } from '../user/entities/user.entity';
@@ -17,6 +17,7 @@ import {
 import { Vote } from '../governance/entities/vote.entity';
 import { MailService } from '../mail/mail.service';
 import { StellarService } from '../blockchain/stellar.service';
+import { ShutdownTrackedTask } from '../../common/decorators/shutdown-task.decorator';
 
 @Injectable()
 export class GovernanceNotificationScheduler {
@@ -28,8 +29,8 @@ export class GovernanceNotificationScheduler {
     private readonly stellarService: StellarService,
     @InjectRepository(PendingNotification)
     private readonly pendingRepo: Repository<PendingNotification>,
-    @InjectRepository(NotificationPreference)
-    private readonly preferenceRepo: Repository<NotificationPreference>,
+    @InjectRepository(UserPreference)
+    private readonly preferenceRepo: Repository<UserPreference>,
     @InjectRepository(User)
     private readonly userRepo: Repository<User>,
     @InjectRepository(GovernanceProposal)
@@ -41,6 +42,7 @@ export class GovernanceNotificationScheduler {
   /**
    * Daily Digest: Every day at midnight
    */
+  @ShutdownTrackedTask()
   @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
   async handleDailyDigest() {
     this.logger.log('Starting Daily Governance Digest...');
@@ -50,6 +52,7 @@ export class GovernanceNotificationScheduler {
   /**
    * Weekly Digest: Every Monday at midnight
    */
+  @ShutdownTrackedTask()
   @Cron(CronExpression.EVERY_WEEKEND)
   async handleWeeklyDigest() {
     this.logger.log('Starting Weekly Governance Digest...');
@@ -60,6 +63,7 @@ export class GovernanceNotificationScheduler {
    * Voting Reminders: Every hour
    * Notifies users who haven't voted on proposals closing in ~24 hours
    */
+  @ShutdownTrackedTask()
   @Cron(CronExpression.EVERY_HOUR)
   async handleVotingReminders() {
     this.logger.log('Checking for upcoming voting deadlines...');

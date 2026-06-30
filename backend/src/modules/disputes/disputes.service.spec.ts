@@ -4,9 +4,15 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import {
   Dispute,
   DisputeMessage,
+  DisputeTimeline,
   DisputeStatus,
 } from './entities/dispute.entity';
 import { MedicalClaim } from '../claims/entities/medical-claim.entity';
+import { DisputeEvidence } from './entities/dispute-evidence.entity';
+import { NotificationsService } from '../notifications/notifications.service';
+import { AuditLogService } from '../../common/services/audit-log.service';
+import { StorageService } from '../storage/storage.service';
+import { JobQueueService } from '../job-queue/job-queue.service';
 import { BadRequestException } from '@nestjs/common';
 
 describe('DisputesService', () => {
@@ -28,6 +34,30 @@ describe('DisputesService', () => {
     findOneBy: jest.fn(),
   };
 
+  const mockTimelineRepository = {
+    create: jest.fn((data) => data),
+    save: jest.fn((data) => Promise.resolve(data)),
+  };
+
+  const mockNotificationsService = {
+    createNotification: jest.fn(),
+  };
+
+  const mockEvidenceRepository = {
+    create: jest.fn(),
+    save: jest.fn(),
+    find: jest.fn(),
+  };
+
+  const mockStorageService = {
+    uploadFile: jest.fn(),
+    getSignedUrl: jest.fn(),
+  };
+
+  const mockJobQueueService = {
+    addDisputeEvidenceJob: jest.fn(),
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -43,6 +73,30 @@ describe('DisputesService', () => {
         {
           provide: getRepositoryToken(MedicalClaim),
           useValue: mockClaimRepository,
+        },
+        {
+          provide: getRepositoryToken(DisputeTimeline),
+          useValue: mockTimelineRepository,
+        },
+        {
+          provide: getRepositoryToken(DisputeEvidence),
+          useValue: mockEvidenceRepository,
+        },
+        {
+          provide: NotificationsService,
+          useValue: mockNotificationsService,
+        },
+        {
+          provide: AuditLogService,
+          useValue: { log: jest.fn().mockResolvedValue(undefined) },
+        },
+        {
+          provide: StorageService,
+          useValue: mockStorageService,
+        },
+        {
+          provide: JobQueueService,
+          useValue: mockJobQueueService,
         },
       ],
     }).compile();

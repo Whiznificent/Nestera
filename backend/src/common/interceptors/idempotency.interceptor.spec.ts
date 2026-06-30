@@ -1,112 +1,138 @@
-import { ExecutionContext, CallHandler, ConflictException, BadRequestException } from '@nestjs/common';
+import {
+  ExecutionContext,
+  CallHandler,
+  ConflictException,
+} from '@nestjs/common';
+import { Reflector } from '@nestjs/core';
 import { IdempotencyInterceptor } from './idempotency.interceptor';
-import { IdempotencyService } from '../services/idempotency.service';
-import { of, throwError } from 'rxjs';
+import { IDEMPOTENCY_KEY } from '../decorators/idempotent.decorator';
+import { of, throwError, firstValueFrom } from 'rxjs';
 
 describe('IdempotencyInterceptor', () => {
   let interceptor: IdempotencyInterceptor;
-  let idempotencyService: jest.Mocked<IdempotencyService>;
+  let reflector: Reflector;
+  let cache: Record<string, unknown>;
 
-  beforeEach(() => {
-    idempotencyService = {
-      getResponse: jest.fn(),
-      saveResponse: jest.fn(),
-      isProcessing: jest.fn(),
-      setProcessing: jest.fn(),
-      removeProcessing: jest.fn(),
-    } as any;
-
-    interceptor = new IdempotencyInterceptor(idempotencyService);
-  });
-
-  const createMockContext = (method: string, headers: any, user: any = { id: 'user1' }): ExecutionContext => ({
-    switchToHttp: () => ({
-      getRequest: () => ({
-        method,
-        headers,
-        user,
-      }),
+  const mockCache = {
+    get: jest.fn(async (key: string) => cache[key] ?? null),
+    set: jest.fn(async (key: string, value: unknown) => {
+      cache[key] = value;
     }),
-  } as any);
-
-  const mockCallHandler: CallHandler = {
-    handle: () => of({ success: true }),
+    del: jest.fn(async (key: string) => {
+      delete cache[key];
+    }),
   };
 
-  it('should skip if not a mutation method (GET)', async () => {
-    const context = createMockContext('GET', { 'x-idempotency-key': 'key1' });
-    const next = { handle: jest.fn().mockReturnValue(of({ data: 'ok' })) };
+  beforeEach(() => {
+    cache = {};
+    reflector = new Reflector();
+    interceptor = new IdempotencyInterceptor(reflector, mockCache as any);
+    jest.clearAllMocks();
+  });
+
+  const createMockContext = (
+    method: string,
+    path: string,
+    headers: Record<string, string>,
+    body: unknown = {},
+    handlerFn?: Function,
+  ): ExecutionContext =>
+    ({
+      switchToHttp: () => ({
+        getRequest: () => ({ method, path, headers, body }),
+        getResponse: () => ({
+          statusCode: 200,
+          setHeader: jest.fn(),
+          status: jest.fn(),
+        }),
+      }),
+      getHandler: () => handlerFn ?? (() => {}),
+    }) as any;
+
+  it('should skip when no @Idempotent decorator is present', async () => {
+    jest.spyOn(reflector, 'get').mockReturnValue(undefined);
+    const context = createMockContext('POST', '/test', { 'idempotency-key': 'k1' });
+    const next = { handle: jest.fn().mockReturnValue(of({ ok: true })) };
+
+    const result$ = await interceptor.intercept(context, next);
+    expect(result$).toBe(next.handle());
+    expect(mockCache.get).not.toHaveBeenCalled();
+  });
+
+  it('should skip when no idempotency-key header is provided', async () => {
+    jest.spyOn(reflector, 'get').mockReturnValue({ ttlSeconds: 3600 });
+    const context = createMockContext('POST', '/test', {});
+    const next = { handle: jest.fn().mockReturnValue(of({ ok: true })) };
 
     await interceptor.intercept(context, next);
-
     expect(next.handle).toHaveBeenCalled();
-    expect(idempotencyService.getResponse).not.toHaveBeenCalled();
   });
 
-  it('should skip if no idempotency key is provided', async () => {
-    const context = createMockContext('POST', {});
-    const next = { handle: jest.fn().mockReturnValue(of({ data: 'ok' })) };
+  it('should return cached response on idempotency hit', async () => {
+    jest.spyOn(reflector, 'get').mockReturnValue({ ttlSeconds: 3600 });
 
-    await interceptor.intercept(context, next);
+    const payloadHash = require('crypto')
+      .createHash('sha256')
+      .update(JSON.stringify({}))
+      .digest('hex');
 
-    expect(next.handle).toHaveBeenCalled();
-    expect(idempotencyService.getResponse).not.toHaveBeenCalled();
-  });
-
-  it('should return cached response if key exists', async (done) => {
-    const context = createMockContext('POST', { 'x-idempotency-key': 'key1' });
-    const cachedResponse = { success: true, fromCache: true };
-    idempotencyService.getResponse.mockResolvedValue(cachedResponse);
-
-    const result$ = await interceptor.intercept(context, mockCallHandler);
-    
-    result$.subscribe(response => {
-      expect(response).toEqual(cachedResponse);
-      expect(idempotencyService.getResponse).toHaveBeenCalledWith('key1', 'user1');
-      done();
-    });
-  });
-
-  it('should throw ConflictException if request is already being processed', async () => {
-    const context = createMockContext('POST', { 'x-idempotency-key': 'key1' });
-    idempotencyService.getResponse.mockResolvedValue(null);
-    idempotencyService.isProcessing.mockResolvedValue(true);
-
-    await expect(interceptor.intercept(context, mockCallHandler)).rejects.toThrow(ConflictException);
-  });
-
-  it('should process request and cache response if key is new', async (done) => {
-    const context = createMockContext('POST', { 'x-idempotency-key': 'key1' });
-    idempotencyService.getResponse.mockResolvedValue(null);
-    idempotencyService.isProcessing.mockResolvedValue(false);
-
-    const result$ = await interceptor.intercept(context, mockCallHandler);
-
-    result$.subscribe(() => {
-      expect(idempotencyService.setProcessing).toHaveBeenCalledWith('key1', 'user1');
-      expect(idempotencyService.saveResponse).toHaveBeenCalledWith('key1', 'user1', { success: true });
-      expect(idempotencyService.removeProcessing).toHaveBeenCalledWith('key1', 'user1');
-      done();
-    });
-  });
-
-  it('should remove processing lock even if request fails', async (done) => {
-    const context = createMockContext('POST', { 'x-idempotency-key': 'key1' });
-    idempotencyService.getResponse.mockResolvedValue(null);
-    idempotencyService.isProcessing.mockResolvedValue(false);
-    
-    const failingHandler: CallHandler = {
-      handle: () => throwError(() => new Error('API Error')),
+    cache['idempotency:POST:/test:k1'] = {
+      payloadHash,
+      statusCode: 201,
+      body: { id: '123' },
+      completedAt: new Date().toISOString(),
     };
 
-    const result$ = await interceptor.intercept(context, failingHandler);
+    const context = createMockContext('POST', '/test', { 'idempotency-key': 'k1' });
+    const next: CallHandler = { handle: () => of({ shouldNotReturn: true }) };
 
-    result$.subscribe({
-      error: () => {
-        expect(idempotencyService.removeProcessing).toHaveBeenCalledWith('key1', 'user1');
-        expect(idempotencyService.saveResponse).not.toHaveBeenCalled();
-        done();
-      }
-    });
+    const result$ = await interceptor.intercept(context, next);
+    const result = await firstValueFrom(result$);
+    expect(result).toEqual({ id: '123' });
+  });
+
+  it('should return 409 when same key is used with different payload', async () => {
+    jest.spyOn(reflector, 'get').mockReturnValue({ ttlSeconds: 3600 });
+
+    cache['idempotency:POST:/test:k1'] = {
+      payloadHash: 'different-hash',
+      statusCode: 201,
+      body: { id: '123' },
+      completedAt: new Date().toISOString(),
+    };
+
+    const context = createMockContext('POST', '/test', { 'idempotency-key': 'k1' });
+    const next: CallHandler = { handle: () => of({}) };
+
+    const result$ = await interceptor.intercept(context, next);
+    await expect(firstValueFrom(result$)).rejects.toThrow(ConflictException);
+  });
+
+  it('should process and cache a new request', async () => {
+    jest.spyOn(reflector, 'get').mockReturnValue({ ttlSeconds: 3600 });
+
+    const context = createMockContext('POST', '/test', { 'idempotency-key': 'k2' });
+    const next: CallHandler = { handle: () => of({ created: true }) };
+
+    const result$ = await interceptor.intercept(context, next);
+    const result = await firstValueFrom(result$);
+
+    expect(result).toEqual({ created: true });
+    await new Promise((r) => setTimeout(r, 10));
+    expect(mockCache.set).toHaveBeenCalled();
+  });
+
+  it('should release lock on error', async () => {
+    jest.spyOn(reflector, 'get').mockReturnValue({ ttlSeconds: 3600 });
+
+    const context = createMockContext('POST', '/test', { 'idempotency-key': 'k3' });
+    const next: CallHandler = {
+      handle: () => throwError(() => new Error('boom')),
+    };
+
+    const result$ = await interceptor.intercept(context, next);
+    await expect(firstValueFrom(result$)).rejects.toThrow('boom');
+    await new Promise((r) => setTimeout(r, 10));
+    expect(mockCache.del).toHaveBeenCalled();
   });
 });

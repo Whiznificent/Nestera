@@ -34,7 +34,7 @@ export class SystemHealthIndicator extends HealthIndicator {
       uptime: `${uptime.toFixed(0)}s`,
     };
 
-    const isHealthy = (usedMem / totalMem) < 0.95;
+    const isHealthy = usedMem / totalMem < 0.95;
 
     return this.getStatus(key, isHealthy, metrics);
   }

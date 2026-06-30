@@ -51,7 +51,10 @@ import {
 import { RecommendationResponseDto } from './dto/recommendation-response.dto';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { CorrelationId } from '../../common/decorators/correlation-id.decorator';
+import { RequestId } from '../../common/decorators/request-id.decorator';
 import { RpcThrottleGuard } from '../../common/guards/rpc-throttle.guard';
+import { Idempotent } from '../../common/decorators/idempotent.decorator';
 import { RecommendationService } from './services/recommendation.service';
 import { AutoDepositService } from './services/auto-deposit.service';
 import { IdempotencyInterceptor } from '../../common/interceptors/idempotency.interceptor';
@@ -60,6 +63,15 @@ import {
   AutoDepositResponseDto,
 } from './dto/auto-deposit.dto';
 import { AutoDepositSchedule } from './entities/auto-deposit-schedule.entity';
+import { GoalTransferService } from './services/goal-transfer.service';
+import {
+  CreateGoalTransferScheduleDto,
+  GoalTransferScheduleResponseDto,
+} from './dto/goal-transfer.dto';
+import {
+  GoalTransferSchedule,
+  GoalTransferExecution,
+} from './entities/goal-transfer-schedule.entity';
 import {
   SavingsGoalProgress,
   UserSubscriptionWithLiveBalance,
@@ -73,6 +85,7 @@ export class SavingsController {
     private readonly milestoneService: MilestoneService,
     private readonly recommendationService: RecommendationService,
     private readonly autoDepositService: AutoDepositService,
+    private readonly goalTransferService: GoalTransferService,
   ) {}
 
   @Get('products')
@@ -210,6 +223,7 @@ export class SavingsController {
   @UseGuards(JwtAuthGuard)
   @UseInterceptors(IdempotencyInterceptor)
   @HttpCode(HttpStatus.CREATED)
+  @Idempotent({ ttlSeconds: 86400 })
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Subscribe to a savings product' })
   @ApiBody({ type: SubscribeDto })
@@ -223,11 +237,16 @@ export class SavingsController {
   async subscribe(
     @Body() dto: SubscribeDto,
     @CurrentUser() user: { id: string; email: string },
+    @CorrelationId() correlationId?: string,
+    @RequestId() requestId?: string,
   ): Promise<UserSubscription> {
     return await this.savingsService.subscribe(
       user.id,
       dto.productId,
       dto.amount,
+      false,
+      correlationId,
+      requestId,
     );
   }
 
@@ -235,6 +254,7 @@ export class SavingsController {
   @UseGuards(JwtAuthGuard)
   @UseInterceptors(IdempotencyInterceptor)
   @HttpCode(HttpStatus.CREATED)
+  @Idempotent({ ttlSeconds: 86400 })
   @ApiBearerAuth()
   @ApiOperation({
     summary: 'Request withdrawal from a savings subscription',
@@ -256,12 +276,16 @@ export class SavingsController {
   async withdraw(
     @Body() dto: WithdrawDto,
     @CurrentUser() user: { id: string; email: string },
+    @CorrelationId() correlationId?: string,
+    @RequestId() requestId?: string,
   ): Promise<WithdrawalResponseDto> {
     const withdrawal = await this.savingsService.createWithdrawalRequest(
       user.id,
       dto.subscriptionId,
       dto.amount,
       dto.reason,
+      correlationId,
+      requestId,
     );
 
     return {
@@ -529,5 +553,83 @@ export class SavingsController {
     @CurrentUser() user: { id: string; email: string },
   ): Promise<void> {
     return this.autoDepositService.cancel(id, user.id);
+  }
+
+  // ── Goal Auto-Transfer (#930) ──────────────────────────────────────────────
+
+  @Post('goal-transfer/create')
+  @UseGuards(JwtAuthGuard)
+  @UseInterceptors(IdempotencyInterceptor)
+  @HttpCode(HttpStatus.CREATED)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Create a recurring goal auto-transfer schedule' })
+  @ApiBody({ type: CreateGoalTransferScheduleDto })
+  @ApiResponse({ status: 201, type: GoalTransferScheduleResponseDto })
+  async createGoalTransfer(
+    @Body() dto: CreateGoalTransferScheduleDto,
+    @CurrentUser() user: { id: string },
+  ): Promise<GoalTransferSchedule> {
+    return this.goalTransferService.create(user.id, dto);
+  }
+
+  @Get('goal-transfer')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'List goal auto-transfer schedules for current user',
+  })
+  @ApiResponse({ status: 200, type: [GoalTransferScheduleResponseDto] })
+  async getGoalTransfers(
+    @CurrentUser() user: { id: string },
+  ): Promise<GoalTransferSchedule[]> {
+    return this.goalTransferService.findAllForUser(user.id);
+  }
+
+  @Patch('goal-transfer/:id/pause')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Pause a goal auto-transfer schedule' })
+  async pauseGoalTransfer(
+    @Param('id') id: string,
+    @CurrentUser() user: { id: string },
+  ): Promise<GoalTransferSchedule> {
+    return this.goalTransferService.pause(id, user.id);
+  }
+
+  @Patch('goal-transfer/:id/resume')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Resume a paused goal auto-transfer schedule' })
+  async resumeGoalTransfer(
+    @Param('id') id: string,
+    @CurrentUser() user: { id: string },
+  ): Promise<GoalTransferSchedule> {
+    return this.goalTransferService.resume(id, user.id);
+  }
+
+  @Delete('goal-transfer/:id')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Cancel a goal auto-transfer schedule' })
+  async cancelGoalTransfer(
+    @Param('id') id: string,
+    @CurrentUser() user: { id: string },
+  ): Promise<void> {
+    return this.goalTransferService.cancel(id, user.id);
+  }
+
+  @Get('goal-transfer/:id/executions')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Get execution history for a goal transfer schedule',
+  })
+  @ApiResponse({ status: 200, type: [GoalTransferExecution] })
+  async getGoalTransferExecutions(
+    @Param('id') id: string,
+    @CurrentUser() user: { id: string },
+  ): Promise<GoalTransferExecution[]> {
+    return this.goalTransferService.getExecutions(id, user.id);
   }
 }

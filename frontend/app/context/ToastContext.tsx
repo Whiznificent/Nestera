@@ -1,9 +1,9 @@
-"use client";
+'use client';
 
-import React, { createContext, useCallback, useContext, useMemo, useState } from "react";
-import { AlertCircle, AlertTriangle, CheckCircle2, Info, X } from "lucide-react";
+import React, { createContext, useCallback, useContext, useMemo, useState } from 'react';
+import { AlertCircle, AlertTriangle, CheckCircle2, Info, X } from 'lucide-react';
 
-type ToastType = "success" | "error" | "warning" | "info";
+type ToastType = 'success' | 'error' | 'warning' | 'info';
 
 interface ToastOptions {
   title: string;
@@ -12,7 +12,7 @@ interface ToastOptions {
   duration?: number;
 }
 
-interface Toast extends Required<Omit<ToastOptions, "duration">> {
+interface Toast extends Required<Omit<ToastOptions, 'duration'>> {
   id: string;
   duration: number;
 }
@@ -29,12 +29,10 @@ const ToastContext = createContext<ToastContextValue | null>(null);
 
 const typeClasses: Record<ToastType, string> = {
   success:
-    "border-emerald-500/30 bg-emerald-500/10 text-emerald-200 [&_.toast-accent]:bg-emerald-400",
-  error:
-    "border-rose-500/30 bg-rose-500/10 text-rose-200 [&_.toast-accent]:bg-rose-400",
-  warning:
-    "border-amber-500/30 bg-amber-500/10 text-amber-200 [&_.toast-accent]:bg-amber-400",
-  info: "border-cyan-500/30 bg-cyan-500/10 text-cyan-100 [&_.toast-accent]:bg-cyan-400",
+    'border-emerald-500/30 bg-emerald-500/10 text-emerald-200 [&_.toast-accent]:bg-emerald-400',
+  error: 'border-rose-500/30 bg-rose-500/10 text-rose-200 [&_.toast-accent]:bg-rose-400',
+  warning: 'border-amber-500/30 bg-amber-500/10 text-amber-200 [&_.toast-accent]:bg-amber-400',
+  info: 'border-cyan-500/30 bg-cyan-500/10 text-cyan-100 [&_.toast-accent]:bg-cyan-400',
 };
 
 const typeIcon: Record<ToastType, React.ReactNode> = {
@@ -52,7 +50,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const showToast = useCallback(
-    ({ title, message = "", type = "info", duration = 4500 }: ToastOptions) => {
+    ({ title, message = '', type = 'info', duration = 4500 }: ToastOptions) => {
       const id = `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
       const toast: Toast = { id, title, message, type, duration };
       setToasts((current) => [...current, toast]);
@@ -67,10 +65,10 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   const value = useMemo<ToastContextValue>(
     () => ({
       showToast,
-      success: (title, message) => showToast({ title, message, type: "success" }),
-      error: (title, message) => showToast({ title, message, type: "error" }),
-      warning: (title, message) => showToast({ title, message, type: "warning" }),
-      info: (title, message) => showToast({ title, message, type: "info" }),
+      success: (title, message) => showToast({ title, message, type: 'success' }),
+      error: (title, message) => showToast({ title, message, type: 'error' }),
+      warning: (title, message) => showToast({ title, message, type: 'warning' }),
+      info: (title, message) => showToast({ title, message, type: 'info' }),
     }),
     [showToast],
   );
@@ -88,7 +86,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
           <div
             key={toast.id}
             role="status"
-            className={`pointer-events-auto overflow-hidden rounded-2xl border shadow-2xl backdrop-blur-sm ${typeClasses[toast.type]}`}
+            className={`pointer-events-auto overflow-hidden rounded-2xl border shadow-2xl backdrop-blur-sm animate-slide-in-right ${typeClasses[toast.type]}`}
           >
             <div className="flex items-start gap-3 p-4">
               <span className="mt-0.5 shrink-0">{typeIcon[toast.type]}</span>
@@ -121,8 +119,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
 export function useToast() {
   const context = useContext(ToastContext);
   if (!context) {
-    throw new Error("useToast must be used within ToastProvider");
+    throw new Error('useToast must be used within ToastProvider');
   }
   return context;
 }
-

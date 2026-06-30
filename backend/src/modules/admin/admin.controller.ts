@@ -20,7 +20,9 @@ import { UserService } from '../user/user.service';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
+import { AdminHighRisk } from '../../common/decorators/admin-high-risk.decorator';
 import { Role } from '../../common/enums/role.enum';
+import { Idempotent } from '../../common/decorators/idempotent.decorator';
 import { RateLimitMonitorService } from '../../common/services/rate-limit-monitor.service';
 import { ApproveKycDto, RejectKycDto } from '../user/dto/update-user.dto';
 
@@ -36,12 +38,17 @@ export class AdminController {
   ) {}
 
   @Patch('users/:id/kyc/approve')
-  @ApiOperation({ summary: 'Approve KYC for a user' })
-  @ApiParam({ name: 'id', description: 'User UUID' })
+  @AdminHighRisk()
+  @Idempotent({ ttlSeconds: 86400 })
+  @ApiOperation({
+    summary: 'Approve KYC for a user',
+    description: 'High-risk operation. Requires confirmation on first attempt.',
+  })
   @ApiResponse({ status: 200, description: 'KYC approved' })
-  @ApiResponse({ status: 400, description: 'Missing user ID' })
+  @ApiResponse({ status: 400, description: 'User ID is required' })
+  @ApiResponse({ status: 403, description: 'Confirmation required' })
+  @ApiParam({ name: 'id', description: 'User UUID' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  @ApiResponse({ status: 403, description: 'Admin role required' })
   @ApiResponse({ status: 404, description: 'User not found' })
   async approveKyc(@Param('id') userId: string) {
     if (!userId) {
@@ -51,12 +58,20 @@ export class AdminController {
   }
 
   @Patch('users/:id/kyc/reject')
-  @ApiOperation({ summary: 'Reject KYC for a user' })
-  @ApiParam({ name: 'id', description: 'User UUID' })
+  @AdminHighRisk()
+  @Idempotent({ ttlSeconds: 86400 })
+  @ApiOperation({
+    summary: 'Reject KYC for a user',
+    description: 'High-risk operation. Requires confirmation on first attempt.',
+  })
   @ApiResponse({ status: 200, description: 'KYC rejected' })
-  @ApiResponse({ status: 400, description: 'Missing user ID or rejection reason' })
+  @ApiResponse({
+    status: 400,
+    description: 'User ID or rejection reason missing',
+  })
+  @ApiParam({ name: 'id', description: 'User UUID' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  @ApiResponse({ status: 403, description: 'Admin role required' })
+  @ApiResponse({ status: 403, description: 'Confirmation required' })
   @ApiResponse({ status: 404, description: 'User not found' })
   async rejectKyc(@Param('id') userId: string, @Body() dto: RejectKycDto) {
     if (!userId) {
@@ -69,15 +84,21 @@ export class AdminController {
   }
 
   @Patch('users/:id/kyc')
+  @AdminHighRisk()
+  @Idempotent({ ttlSeconds: 86400 })
   @ApiOperation({
-    summary: 'Approve or reject KYC for a user (single endpoint)',
-    description: 'Set `action` to `"approve"` or `"reject"`. Reason is required for rejection.',
+    summary: 'Update KYC status (approve or reject)',
+    description:
+      'High-risk operation. Requires confirmation on first attempt. Set `action` to `"approve"` or `"reject"`. Reason is required for rejection.',
+  })
+  @ApiResponse({ status: 200, description: 'KYC status updated' })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid action or missing parameters',
   })
   @ApiParam({ name: 'id', description: 'User UUID' })
-  @ApiResponse({ status: 200, description: 'KYC status updated' })
-  @ApiResponse({ status: 400, description: 'Invalid action or missing reason' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  @ApiResponse({ status: 403, description: 'Admin role required' })
+  @ApiResponse({ status: 403, description: 'Confirmation required' })
   @ApiResponse({ status: 404, description: 'User not found' })
   async updateKycStatus(
     @Param('id') userId: string,
@@ -112,7 +133,12 @@ export class AdminController {
 
   @Get('rate-limits/violations')
   @ApiOperation({ summary: 'Get recent rate limit violations' })
-  @ApiQuery({ name: 'limit', required: false, description: 'Max results (default 50)', type: Number })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    description: 'Max results (default 50)',
+    type: Number,
+  })
   @ApiResponse({ status: 200, description: 'Recent rate limit violations' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 403, description: 'Admin role required' })
@@ -125,7 +151,12 @@ export class AdminController {
   @Get('rate-limits/violations/:userId')
   @ApiOperation({ summary: 'Get rate limit violations for a specific user' })
   @ApiParam({ name: 'userId', description: 'User UUID' })
-  @ApiQuery({ name: 'limit', required: false, description: 'Max results (default 50)', type: Number })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    description: 'Max results (default 50)',
+    type: Number,
+  })
   @ApiResponse({ status: 200, description: 'User rate limit violations' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 403, description: 'Admin role required' })

@@ -7,9 +7,12 @@ import request from 'supertest';
 import { ReferralsModule } from './referrals.module';
 import { UserModule } from '../user/user.module';
 import { AuthModule } from '../../auth/auth.module';
+import { CommonModule } from '../../common/common.module';
 import { Referral } from './entities/referral.entity';
 import { ReferralCampaign } from './entities/referral-campaign.entity';
-import { User } from '../user/entities/user.entity';
+import { ReferralFraudAudit } from './entities/referral-fraud-audit.entity';
+import { Transaction } from '../transactions/entities/transaction.entity';
+import { AuditLog } from '../../common/entities/audit-log.entity';
 
 describe('Referrals Integration Tests', () => {
   let app: INestApplication;
@@ -22,7 +25,12 @@ describe('Referrals Integration Tests', () => {
       imports: [
         ConfigModule.forRoot({
           isGlobal: true,
-          load: [() => ({ jwt: { secret: 'test-secret-key' } })],
+          load: [
+            () => ({
+              jwt: { secret: 'test-secret-key' },
+              referralFraud: {},
+            }),
+          ],
         }),
         TypeOrmModule.forRoot({
           type: 'postgres',
@@ -31,7 +39,14 @@ describe('Referrals Integration Tests', () => {
           database: process.env.DB_NAME || 'test_db',
           username: process.env.DB_USER || 'postgres',
           password: process.env.DB_PASS || 'postgres',
-          entities: [User, Referral, ReferralCampaign],
+          entities: [
+            User,
+            Referral,
+            ReferralCampaign,
+            ReferralFraudAudit,
+            Transaction,
+            AuditLog,
+          ],
           synchronize: true,
           dropSchema: true,
           // Fail fast instead of retrying when DB is unavailable
@@ -39,6 +54,7 @@ describe('Referrals Integration Tests', () => {
           retryDelay: 500,
         }),
         EventEmitterModule.forRoot(),
+        CommonModule,
         ReferralsModule,
         UserModule,
         AuthModule,

@@ -39,6 +39,21 @@ process.env.MAIL_PORT = process.env.MAIL_PORT || '1025';
 process.env.MAIL_USER = process.env.MAIL_USER || 'test_user';
 process.env.MAIL_PASS = process.env.MAIL_PASS || 'test_password';
 
+// Database host fallback (in case DATABASE_URL is not set)
+process.env.DB_HOST = process.env.DB_HOST || 'localhost';
+process.env.DB_PORT = process.env.DB_PORT || '5432';
+process.env.DB_NAME = process.env.DB_NAME || 'nestera_test';
+process.env.DB_USER = process.env.DB_USER || 'user';
+process.env.DB_PASS = process.env.DB_PASS || 'pass';
+
+// Fallback RPC config
+process.env.SOROBAN_RPC_FALLBACK_URLS =
+  process.env.SOROBAN_RPC_FALLBACK_URLS || 'https://soroban-testnet.stellar.org';
+process.env.HORIZON_FALLBACK_URLS =
+  process.env.HORIZON_FALLBACK_URLS || 'https://horizon-testnet.stellar.org';
+process.env.STELLAR_EVENT_POLL_INTERVAL =
+  process.env.STELLAR_EVENT_POLL_INTERVAL || '60000';
+
 // Redis configuration
 process.env.REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379';
 

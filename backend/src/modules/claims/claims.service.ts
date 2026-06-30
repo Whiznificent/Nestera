@@ -28,7 +28,12 @@ export class ClaimsService {
   }
 
   async findAll(): Promise<MedicalClaim[]> {
-    return await this.claimsRepository.find({ order: { createdAt: 'DESC' } });
+    // Stable sort: primary key createdAt DESC, tie-breaker id DESC so that
+    // concurrent inserts at the same millisecond never cause duplicate/missing
+    // items across paginated pages.
+    return await this.claimsRepository.find({
+      order: { createdAt: 'DESC', id: 'DESC' },
+    });
   }
 
   async findOne(id: string): Promise<MedicalClaim | null> {

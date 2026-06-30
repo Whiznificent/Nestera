@@ -1,72 +1,18 @@
-"use client";
-
-import { useEffect, useState } from "react";
-import { env } from "../lib/env";
-
-const COINGECKO_IDS: Record<string, string> = {
-  XLM: "stellar",
-  USDC: "usd-coin",
-  AQUA: "aqua",
-};
-
-interface PriceData {
-  [coingeckoId: string]: { usd: number };
-}
-
-async function fetchPrices(): Promise<PriceData> {
-  const assetIds = Object.values(COINGECKO_IDS).join(",");
-  const res = await fetch(
-    `${env.coingeckoApi}/simple/price?ids=${assetIds}&vs_currencies=usd`,
-  );
-
-  if (!res.ok) {
-    throw new Error("Failed to fetch prices");
-  }
-
-  return res.json();
-}
-
+// Stub price hook for MVP
 export function usePrices() {
-  const [data, setData] = useState<PriceData>();
-  const [error, setError] = useState<Error | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    const load = async () => {
-      try {
-        const prices = await fetchPrices();
-        if (!cancelled) {
-          setData(prices);
-          setError(null);
-        }
-      } catch (err) {
-        if (!cancelled) {
-          setError(err instanceof Error ? err : new Error("Failed to fetch prices"));
-        }
-      }
-    };
-
-    load();
-    const interval = setInterval(load, 5 * 60 * 1000);
-
-    return () => {
-      cancelled = true;
-      clearInterval(interval);
-    };
-  }, []);
-
-  return { data, error, isLoading: !data && !error };
+  return {
+    data: {},
+    prices: {},
+    loading: false,
+    error: null,
+  };
 }
 
-export function getAssetPrice(
-  prices: PriceData | undefined,
-  assetCode: string,
-): number {
-  if (!prices) return assetCode === "USDC" ? 1 : 0;
-  const coingeckoId = COINGECKO_IDS[assetCode];
-  return prices[coingeckoId]?.usd ?? (assetCode === "USDC" ? 1 : 0);
+export function getAssetPrice(prices: any, asset: string): number {
+  // Stub prices
+  const defaultPrices: Record<string, number> = {
+    USDC: 1.0,
+    XLM: 0.12,
+  };
+  return prices?.[asset] || defaultPrices[asset] || 0;
 }
-
-export { COINGECKO_IDS };
-export type { PriceData };

@@ -1,23 +1,23 @@
-import React from "react";
-import { Loader2 } from "lucide-react";
+import React from 'react';
+import { Loader2 } from 'lucide-react';
 
 // Respects prefers-reduced-motion via Tailwind's motion-safe modifier
-const pulse = "motion-safe:animate-pulse";
+const pulse = 'motion-safe:animate-pulse';
 
 /**
  * Standard spinner component for small loading states.
- * 
+ *
  * @example
  * ```tsx
  * <Spinner text="Fetching data..." className="my-4" />
  * ```
- * 
+ *
  * @param text - Optional text to display next to the spinner. Defaults to "Loading...".
  * @param className - Additional CSS classes.
  */
 export function Spinner({
-  text = "Loading...",
-  className = "",
+  text = 'Loading...',
+  className = '',
 }: {
   text?: string;
   className?: string;
@@ -36,16 +36,11 @@ export function Spinner({
 
 /**
  * Simple skeleton line component.
- * 
+ *
  * @param className - Additional CSS classes to control width, height, etc.
  */
-export function SkeletonLine({ className = "" }: { className?: string }) {
-  return (
-    <div
-      aria-hidden="true"
-      className={`${pulse} rounded-md bg-white/10 ${className}`}
-    />
-  );
+export function SkeletonLine({ className = '' }: { className?: string }) {
+  return <div aria-hidden="true" className={`${pulse} rounded-md bg-white/10 ${className}`} />;
 }
 
 /**
@@ -68,7 +63,7 @@ export function DashboardCardSkeleton() {
 
 /**
  * Skeleton placeholder for a table row.
- * 
+ *
  * @param cols - Number of columns to display.
  */
 export function TableRowSkeleton({ cols = 5 }: { cols?: number }) {
@@ -126,10 +121,10 @@ export function TransactionRowSkeleton() {
 
 /**
  * Skeleton placeholder for a chart.
- * 
+ *
  * @param height - Tailwind height class (e.g., 'h-48').
  */
-export function ChartSkeleton({ height = "h-48" }: { height?: string }) {
+export function ChartSkeleton({ height = 'h-48' }: { height?: string }) {
   return (
     <div
       role="status"
@@ -143,10 +138,10 @@ export function ChartSkeleton({ height = "h-48" }: { height?: string }) {
 
 /**
  * Full page loading fallback component.
- * 
+ *
  * @param message - Optional message to display under the spinner.
  */
-export function PageLoadingFallback({ message = "Loading..." }: { message?: string }) {
+export function PageLoadingFallback({ message = 'Loading...' }: { message?: string }) {
   return (
     <div
       role="status"
@@ -162,7 +157,11 @@ export function PageLoadingFallback({ message = "Loading..." }: { message?: stri
 /**
  * Timeout message for long-running operations.
  */
-export function LoadingTimeout({ message = "This is taking longer than expected..." }: { message?: string }) {
+export function LoadingTimeout({
+  message = 'This is taking longer than expected...',
+}: {
+  message?: string;
+}) {
   return (
     <p role="status" className="text-xs text-[var(--color-text-muted)] text-center py-4">
       {message}

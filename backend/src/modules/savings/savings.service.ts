@@ -5,6 +5,7 @@ import {
   ConflictException,
   Logger,
   Inject,
+  Optional,
 } from '@nestjs/common';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { ConfigService } from '@nestjs/config';
@@ -46,12 +47,19 @@ import { User } from '../user/entities/user.entity';
 import { SavingsService as BlockchainSavingsService } from '../blockchain/savings.service';
 import { PredictiveEvaluatorService } from './services/predictive-evaluator.service';
 import { EventEmitter2 } from '@nestjs/event-emitter';
-import { Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 import { SavingsProductVersionAudit } from './entities/savings-product-version-audit.entity';
 import { WaitlistService } from './waitlist.service';
 import { MilestoneService } from './services/milestone.service';
+import { AuditLogService } from '../../common/services/audit-log.service';
+import {
+  AuditAction,
+  AuditResourceType,
+} from '../../common/entities/audit-log.entity';
+import { TransactionStateMachineService } from '../transactions/transaction-state-machine.service';
+import { DistributedTracingService } from '../apm/distributed-tracing.service';
+import { TraceSpan } from '../../common/decorators/trace-span.decorator';
 
 export type SavingsGoalProgress = GoalProgressDto;
 
@@ -119,17 +127,19 @@ export class SavingsService {
     private readonly productVersionAuditRepository: Repository<SavingsProductVersionAudit>,
     @InjectRepository(WithdrawalRequest)
     private readonly withdrawalRepository: Repository<WithdrawalRequest>,
-    @InjectRepository(Transaction)
-    private readonly transactionRepository: Repository<Transaction>,
+    private readonly transactionStateMachine: TransactionStateMachineService,
     private readonly blockchainSavingsService: BlockchainSavingsService,
     private readonly predictiveEvaluatorService: PredictiveEvaluatorService,
     private readonly milestoneService: MilestoneService,
     private readonly waitlistService: WaitlistService,
     private readonly configService: ConfigService,
     @Inject(CACHE_MANAGER) private readonly cacheManager: Cache,
+    private readonly auditLogService: AuditLogService,
+    @Optional() readonly tracingService?: DistributedTracingService,
     @Optional() private readonly eventEmitter?: EventEmitter2,
   ) {}
 
+  @TraceSpan('savings.createProduct')
   async createProduct(dto: CreateProductDto): Promise<SavingsProduct> {
     if (dto.minAmount > dto.maxAmount) {
       throw new BadRequestException(
@@ -158,6 +168,7 @@ export class SavingsService {
     return savedProduct;
   }
 
+  @TraceSpan('savings.updateProduct')
   async updateProduct(
     id: string,
     dto: UpdateProductDto,
@@ -245,6 +256,7 @@ export class SavingsService {
     return updatedProduct;
   }
 
+  @TraceSpan('savings.findAllProducts')
   async findAllProducts(
     activeOnly = false,
     sort?: 'apy' | 'tvl',
@@ -295,13 +307,20 @@ export class SavingsService {
     } else if (sort === 'tvl') {
       dtos.sort((a, b) => b.tvlAmount - a.tvlAmount);
     } else {
-      // Default sort by createdAt DESC
-      dtos.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+      // Default sort: createdAt DESC with id DESC as a tie-breaker to ensure
+      // stable, deterministic ordering when multiple products share the same
+      // createdAt timestamp (e.g. seeded data or concurrent inserts).
+      dtos.sort((a, b) => {
+        const timeDiff = b.createdAt.getTime() - a.createdAt.getTime();
+        if (timeDiff !== 0) return timeDiff;
+        return b.id < a.id ? -1 : b.id > a.id ? 1 : 0;
+      });
     }
 
     return dtos;
   }
 
+  @TraceSpan('savings.findOneProduct')
   async findOneProduct(id: string): Promise<SavingsProduct> {
     const product = await this.productRepository.findOneBy({ id });
     if (!product) {
@@ -314,6 +333,7 @@ export class SavingsService {
    * #533 / #593 — Compare up to 5 savings products side-by-side.
    * Results are cached per unique sorted product-ID set for 10 minutes.
    */
+  @TraceSpan('savings.compareProducts')
   async compareProducts(
     productIds: string[],
     amount?: number,
@@ -366,6 +386,7 @@ export class SavingsService {
     return response;
   }
 
+  @TraceSpan('savings.findProductWithLiveData')
   async findProductWithLiveData(id: string): Promise<{
     product: SavingsProduct;
     totalAssets: number;
@@ -394,6 +415,7 @@ export class SavingsService {
     return { product, totalAssets, capacity };
   }
 
+  @TraceSpan('savings.migrateSubscriptionsToVersion')
   async migrateSubscriptionsToVersion(
     sourceProductId: string,
     targetProductId: string,
@@ -444,11 +466,14 @@ export class SavingsService {
     return { migratedCount: subscriptions.length, targetProduct };
   }
 
+  @TraceSpan('savings.subscribe')
   async subscribe(
     userId: string,
     productId: string,
     amount: number,
     overrideLimits = false,
+    correlationId?: string,
+    requestId?: string,
   ): Promise<UserSubscription> {
     const product = await this.findOneProduct(productId);
     await this.syncCapacityState(product);
@@ -539,9 +564,22 @@ export class SavingsService {
     // Record waitlist conversion if the user was on the waitlist
     await this.waitlistService.recordConversion(userId, product.id);
 
+    await this.auditLogService.log({
+      action: AuditAction.DEPOSIT,
+      resourceType: AuditResourceType.SAVINGS,
+      actor: userId,
+      correlationId,
+      requestId,
+      resourceId: savedSubscription.id,
+      description: `User subscribed to savings product ${product.name} with amount ${amount}`,
+      newValue: { productId, amount, subscriptionId: savedSubscription.id },
+      success: true,
+    });
+
     return savedSubscription;
   }
 
+  @TraceSpan('savings.findMySubscriptions')
   async findMySubscriptions(
     userId: string,
   ): Promise<UserSubscriptionWithLiveBalance[]> {
@@ -610,6 +648,7 @@ export class SavingsService {
     );
   }
 
+  @TraceSpan('savings.getProductMetrics')
   async getProductMetrics(
     id: string,
     granularity: MetricsGranularity = MetricsGranularity.DAILY,
@@ -821,6 +860,7 @@ export class SavingsService {
     );
   }
 
+  @TraceSpan('savings.getProductCapacitySnapshot')
   async getProductCapacitySnapshot(
     productId: string,
   ): Promise<ProductCapacitySnapshot> {
@@ -885,11 +925,15 @@ export class SavingsService {
     };
   }
 
+  @TraceSpan('savings.findMyGoals')
   async findMyGoals(userId: string): Promise<SavingsGoalProgress[]> {
     const [goals, user, subscriptions] = await Promise.all([
       this.goalRepository.find({
         where: { userId },
-        order: { createdAt: 'DESC' },
+        // Stable sort: primary key createdAt DESC, tie-breaker id DESC so that
+        // concurrent inserts at the same millisecond never cause duplicate/missing
+        // items across paginated pages.
+        order: { createdAt: 'DESC', id: 'DESC' },
       }),
       this.userRepository.findOne({
         where: { id: userId },
@@ -938,6 +982,7 @@ export class SavingsService {
     return progressList;
   }
 
+  @TraceSpan('savings.createGoal')
   async createGoal(
     userId: string,
     goalName: string,
@@ -973,6 +1018,7 @@ export class SavingsService {
     return saved;
   }
 
+  @TraceSpan('savings.updateGoal')
   async updateGoal(
     goalId: string,
     userId: string,
@@ -998,6 +1044,7 @@ export class SavingsService {
     return await this.goalRepository.save(goal);
   }
 
+  @TraceSpan('savings.deleteGoal')
   async deleteGoal(goalId: string, userId: string): Promise<void> {
     const goal = await this.goalRepository.findOne({
       where: { id: goalId, userId },
@@ -1012,11 +1059,71 @@ export class SavingsService {
     await this.goalRepository.remove(goal);
   }
 
+  @TraceSpan('savings.transferToGoal')
+  async transferToGoal(
+    userId: string,
+    goalId: string,
+    amount: number,
+    productId?: string,
+  ): Promise<Transaction> {
+    const goal = await this.goalRepository.findOne({
+      where: { id: goalId, userId },
+    });
+    if (!goal) {
+      throw new NotFoundException(
+        `Savings goal ${goalId} not found or does not belong to user`,
+      );
+    }
+    if (goal.status !== SavingsGoalStatus.IN_PROGRESS) {
+      throw new BadRequestException('Cannot transfer to a completed goal');
+    }
+
+    let resolvedProductId = productId;
+    if (!resolvedProductId) {
+      const user = await this.userRepository.findOne({ where: { id: userId } });
+      resolvedProductId = user?.defaultSavingsProductId ?? undefined;
+    }
+    if (!resolvedProductId) {
+      throw new BadRequestException(
+        'No savings product specified and user has no default product',
+      );
+    }
+
+    await this.subscribe(userId, resolvedProductId, amount, true);
+
+    const tx = await this.transactionStateMachine.createTransaction(
+      {
+      userId,
+      type: TxType.DEPOSIT,
+      amount: String(amount),
+      poolId: resolvedProductId,
+      metadata: { goalId, goalName: goal.goalName, transferType: 'GOAL_AUTO' },
+      txHash: `goal-transfer-${goalId}-${Date.now()}`,
+      },
+      { actor: 'savings-service', reason: 'Goal transfer initiated' },
+    );
+    await this.transactionStateMachine.transitionStatus(tx.id, TxStatus.PENDING_CONFIRMATION, {
+      actor: 'savings-service',
+      reason: 'Transfer awaiting confirmation',
+    });
+    await this.transactionStateMachine.transitionStatus(tx.id, TxStatus.CONFIRMED, {
+      actor: 'savings-service',
+      reason: 'Transfer confirmed',
+    });
+    return this.transactionStateMachine.transitionStatus(tx.id, TxStatus.COMPLETED, {
+      actor: 'savings-service',
+      reason: 'Goal transfer completed',
+    });
+  }
+
+  @TraceSpan('savings.createWithdrawalRequest')
   async createWithdrawalRequest(
     userId: string,
     subscriptionId: string,
     amount: number,
     reason?: string,
+    correlationId?: string,
+    requestId?: string,
   ): Promise<WithdrawalRequest> {
     const subscription = await this.subscriptionRepository.findOne({
       where: { id: subscriptionId, userId },
@@ -1063,10 +1170,24 @@ export class SavingsService {
     const saved = await this.withdrawalRepository.save(withdrawalRequest);
 
     // Process withdrawal asynchronously
-    this.processWithdrawal(saved.id).catch((error) => {
-      this.logger.error(
-        `Failed to process withdrawal ${saved.id}: ${(error as Error).message}`,
-      );
+    this.processWithdrawal(saved.id, correlationId, requestId).catch(
+      (error) => {
+        this.logger.error(
+          `Failed to process withdrawal ${saved.id}: ${(error as Error).message}`,
+        );
+      },
+    );
+
+    await this.auditLogService.log({
+      action: AuditAction.WITHDRAW,
+      resourceType: AuditResourceType.WITHDRAWAL_REQUEST,
+      actor: userId,
+      correlationId,
+      requestId,
+      resourceId: saved.id,
+      description: `User requested withdrawal of ${amount} from subscription ${subscriptionId}${reason ? `: ${reason}` : ''}`,
+      newValue: { subscriptionId, amount, penalty, netAmount, reason },
+      success: true,
     });
 
     return saved;
@@ -1095,7 +1216,11 @@ export class SavingsService {
     return Number(penalty.toFixed(7));
   }
 
-  private async processWithdrawal(withdrawalId: string): Promise<void> {
+  private async processWithdrawal(
+    withdrawalId: string,
+    correlationId?: string,
+    requestId?: string,
+  ): Promise<void> {
     const withdrawal = await this.withdrawalRepository.findOne({
       where: { id: withdrawalId },
       relations: ['subscription', 'subscription.product'],
@@ -1104,6 +1229,8 @@ export class SavingsService {
     if (!withdrawal) {
       throw new NotFoundException(`Withdrawal ${withdrawalId} not found`);
     }
+
+    let transactionId: string | null = null;
 
     try {
       // Update status to processing
@@ -1133,22 +1260,43 @@ export class SavingsService {
       }
 
       // Record in transaction ledger
-      const transaction = this.transactionRepository.create({
-        userId: withdrawal.userId,
-        type: TxType.WITHDRAW,
-        amount: String(withdrawal.netAmount),
-        status: TxStatus.COMPLETED,
-        publicKey: user?.publicKey || null,
-        metadata: {
-          withdrawalRequestId: withdrawal.id,
-          grossAmount: String(withdrawal.amount),
-          penalty: String(withdrawal.penalty),
-          netAmount: String(withdrawal.netAmount),
-          subscriptionId: withdrawal.subscriptionId,
-          reason: withdrawal.reason,
+      const transaction = await this.transactionStateMachine.createTransaction(
+        {
+          userId: withdrawal.userId,
+          type: TxType.WITHDRAW,
+          amount: String(withdrawal.netAmount),
+          publicKey: user?.publicKey || null,
+          metadata: {
+            withdrawalRequestId: withdrawal.id,
+            grossAmount: String(withdrawal.amount),
+            penalty: String(withdrawal.penalty),
+            netAmount: String(withdrawal.netAmount),
+            subscriptionId: withdrawal.subscriptionId,
+            reason: withdrawal.reason,
+          },
         },
+        {
+          actor: 'savings-service',
+          reason: 'Withdrawal ledger transaction created',
+        },
+      );
+      transactionId = transaction.id;
+      await this.transactionStateMachine.transitionStatus(
+        transaction.id,
+        TxStatus.PENDING_CONFIRMATION,
+        {
+          actor: 'savings-service',
+          reason: 'Withdrawal awaiting confirmation',
+        },
+      );
+      await this.transactionStateMachine.transitionStatus(transaction.id, TxStatus.CONFIRMED, {
+        actor: 'savings-service',
+        reason: 'Withdrawal confirmed',
       });
-      await this.transactionRepository.save(transaction);
+      await this.transactionStateMachine.transitionStatus(transaction.id, TxStatus.COMPLETED, {
+        actor: 'savings-service',
+        reason: 'Withdrawal completed',
+      });
 
       // Update subscription amount
       const newAmount =
@@ -1167,6 +1315,23 @@ export class SavingsService {
       withdrawal.completedAt = new Date();
       await this.withdrawalRepository.save(withdrawal);
 
+      await this.auditLogService.log({
+        action: AuditAction.WITHDRAW,
+        resourceType: AuditResourceType.WITHDRAWAL_REQUEST,
+        actor: withdrawal.userId,
+        correlationId,
+        requestId,
+        resourceId: withdrawal.id,
+        description: `Withdrawal ${withdrawalId} processed successfully — net ${withdrawal.netAmount}`,
+        newValue: {
+          status: WithdrawalStatus.COMPLETED,
+          txHash: transaction.txHash,
+          netAmount: withdrawal.netAmount,
+          penalty: withdrawal.penalty,
+        },
+        success: true,
+      });
+
       // Emit event for notification
       this.eventEmitter?.emit('withdrawal.completed', {
         userId: withdrawal.userId,
@@ -1177,8 +1342,41 @@ export class SavingsService {
         timestamp: new Date(),
       });
     } catch (error) {
+      if (transactionId) {
+        try {
+          await this.transactionStateMachine.transitionStatus(
+            transactionId,
+            TxStatus.FAILED,
+            {
+              actor: 'savings-service',
+              reason: 'Withdrawal processing failed',
+              metadata: {
+                error:
+                  error instanceof Error
+                    ? error.message
+                    : 'Unknown withdrawal error',
+              },
+            },
+          );
+        } catch {
+          // If transition is not valid from current state, keep original error flow.
+        }
+      }
       withdrawal.status = WithdrawalStatus.FAILED;
       await this.withdrawalRepository.save(withdrawal);
+
+      await this.auditLogService.log({
+        action: AuditAction.WITHDRAW,
+        resourceType: AuditResourceType.WITHDRAWAL_REQUEST,
+        actor: withdrawal.userId,
+        correlationId,
+        requestId,
+        resourceId: withdrawal.id,
+        description: `Withdrawal ${withdrawalId} failed: ${(error as Error).message}`,
+        errorMessage: (error as Error).message,
+        success: false,
+      });
+
       throw error;
     }
   }

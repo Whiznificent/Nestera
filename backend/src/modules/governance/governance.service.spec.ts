@@ -3,6 +3,8 @@ import { ForbiddenException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { GovernanceService } from './governance.service';
+import { ProposalLifecycleService } from './governance-lifecycle.service';
+import { CacheStrategyService } from '../cache/cache-strategy.service';
 import { UserService } from '../user/user.service';
 import { StellarService } from '../blockchain/stellar.service';
 import { SavingsService } from '../blockchain/savings.service';
@@ -17,6 +19,7 @@ import { Vote, VoteDirection } from './entities/vote.entity';
 import { Delegation } from './entities/delegation.entity';
 import { TransactionsService } from '../transactions/transactions.service';
 import { LedgerTransaction } from '../blockchain/entities/transaction.entity';
+import { AuditLogService } from '../../common/services/audit-log.service';
 
 describe('GovernanceService', () => {
   let service: GovernanceService;
@@ -96,6 +99,25 @@ describe('GovernanceService', () => {
         { provide: TransactionsService, useValue: transactionsService },
         { provide: EventEmitter2, useValue: eventEmitter },
         {
+          provide: ProposalLifecycleService,
+          useValue: {
+            assertValidVotingWindow: jest.fn(),
+            verifyQuorumForQueue: jest.fn(),
+            transitionTo: jest.fn(),
+            finalizeVoting: jest.fn(),
+            getTransitionHistory: jest.fn(),
+          },
+        },
+        {
+          provide: CacheStrategyService,
+          useValue: {
+            get: jest.fn(),
+            set: jest.fn(),
+            del: jest.fn(),
+            wrap: jest.fn().mockImplementation((_k, fn) => fn()),
+          },
+        },
+        {
           provide: getRepositoryToken(GovernanceProposal),
           useValue: proposalRepo,
         },
@@ -107,6 +129,10 @@ describe('GovernanceService', () => {
         {
           provide: getRepositoryToken(Delegation),
           useValue: delegationRepo,
+        },
+        {
+          provide: AuditLogService,
+          useValue: { log: jest.fn().mockResolvedValue(undefined) },
         },
       ],
     }).compile();
@@ -418,7 +444,7 @@ describe('GovernanceService', () => {
       voteRepo.findOneBy.mockResolvedValue({ id: 'v1' });
 
       await expect(service.castVote('user-1', 1, 'FOR' as any)).rejects.toThrow(
-        'User has already voted on this proposal',
+        'You have already voted on this proposal',
       );
     });
   });

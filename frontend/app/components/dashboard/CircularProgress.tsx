@@ -2,7 +2,7 @@ import React from 'react';
 
 /**
  * Props for the CircularProgress component
- * 
+ *
  * @param percentage - The progress value from 0 to 100.
  * @param size - The diameter of the circle in pixels.
  * @param strokeWidth - The thickness of the progress line.
@@ -22,7 +22,7 @@ interface CircularProgressProps {
 /**
  * A circular progress bar that displays a percentage value.
  * Features a smooth transition animation when the percentage changes.
- * 
+ *
  * @example
  * ```tsx
  * <CircularProgress percentage={75} size={120} strokeWidth={8} />
@@ -32,9 +32,9 @@ const CircularProgress: React.FC<CircularProgressProps> = ({
   percentage,
   size = 140,
   strokeWidth = 10,
-  className = "",
-  strokeColor = "#00d4c0",
-  backgroundColor = "rgba(0, 212, 192, 0.1)",
+  className = '',
+  strokeColor = '#00d4c0',
+  backgroundColor = 'rgba(0, 212, 192, 0.1)',
 }) => {
   const radius = (size - strokeWidth) / 2;
   const circumference = radius * 2 * Math.PI;
@@ -42,12 +42,7 @@ const CircularProgress: React.FC<CircularProgressProps> = ({
 
   return (
     <div className={`relative flex items-center justify-center ${className}`}>
-      <svg
-        width={size}
-        height={size}
-        viewBox={`0 0 ${size} ${size}`}
-        className="rotate-[-90deg]"
-      >
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="rotate-[-90deg]">
         {/* Background circle */}
         <circle
           cx={size / 2}

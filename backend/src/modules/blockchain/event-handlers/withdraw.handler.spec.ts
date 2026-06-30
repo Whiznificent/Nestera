@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { DataSource } from 'typeorm';
+import { TransactionStateMachineService } from '../../transactions/transaction-state-machine.service';
 import { xdr, nativeToScVal } from '@stellar/stellar-sdk';
 import { createHash } from 'crypto';
 import { WithdrawHandler } from './withdraw.handler';
@@ -35,6 +36,13 @@ describe('WithdrawHandler', () => {
     create: jest.fn().mockImplementation((v) => v),
   };
 
+  const stateMachineMock = {
+    createTransaction: jest.fn().mockResolvedValue({ id: 'tx-1' }),
+    transitionStatus: jest.fn().mockResolvedValue(undefined),
+    transition: jest.fn(),
+    getState: jest.fn(),
+  };
+
   beforeEach(async () => {
     entityManager = {
       getRepository: jest.fn().mockImplementation((entity) => {
@@ -54,6 +62,10 @@ describe('WithdrawHandler', () => {
       providers: [
         WithdrawHandler,
         { provide: DataSource, useValue: dataSource },
+        {
+          provide: TransactionStateMachineService,
+          useValue: stateMachineMock,
+        },
       ],
     }).compile();
 
@@ -100,13 +112,14 @@ describe('WithdrawHandler', () => {
       const result = await handler.handle(mockEvent);
 
       expect(result).toBe(true);
-      expect(txRepo.save).toHaveBeenCalledWith(
+      expect(stateMachineMock.createTransaction).toHaveBeenCalledWith(
         expect.objectContaining({
           type: LedgerTransactionType.WITHDRAW,
           amount: '200',
-          status: LedgerTransactionStatus.COMPLETED,
         }),
+        expect.objectContaining({ manager: entityManager }),
       );
+      expect(stateMachineMock.transitionStatus).toHaveBeenCalled();
       expect(entityManager.decrement).toHaveBeenCalledWith(
         UserSubscription,
         { id: 'sub-id' },
@@ -130,7 +143,7 @@ describe('WithdrawHandler', () => {
 
       const result = await handler.handle(symbolEvent);
       expect(result).toBe(true);
-      expect(txRepo.save).toHaveBeenCalled();
+      expect(stateMachineMock.createTransaction).toHaveBeenCalled();
       expect(entityManager.decrement).toHaveBeenCalled();
     });
 
@@ -151,11 +164,12 @@ describe('WithdrawHandler', () => {
 
       const result = await handler.handle(alternativeEvent);
       expect(result).toBe(true);
-      expect(txRepo.save).toHaveBeenCalledWith(
+      expect(stateMachineMock.createTransaction).toHaveBeenCalledWith(
         expect.objectContaining({
           amount: '150',
           publicKey: 'G...',
         }),
+        expect.any(Object),
       );
     });
 
@@ -181,8 +195,8 @@ describe('WithdrawHandler', () => {
       txRepo.findOne.mockResolvedValue({ id: 'existing-tx' });
 
       const result = await handler.handle(mockEvent);
-      expect(result).toBe(true); // Handler returns true even if skipping to indicate event was "handled" (consumed)
-      expect(txRepo.save).not.toHaveBeenCalled();
+      expect(result).toBe(true);
+      expect(stateMachineMock.createTransaction).not.toHaveBeenCalled();
       expect(entityManager.decrement).not.toHaveBeenCalled();
     });
   });

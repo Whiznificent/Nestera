@@ -3,10 +3,11 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { ReferralsService } from './referrals.service';
+import { ReferralFraudDetectionService } from './referral-fraud-detection.service';
 import { Referral, ReferralStatus } from './entities/referral.entity';
 import { ReferralCampaign } from './entities/referral-campaign.entity';
+import { ProcessedReferralEvent } from './entities/processed-referral-event.entity';
 import { User } from '../user/entities/user.entity';
-import { Transaction } from '../transactions/entities/transaction.entity';
 import {
   NotFoundException,
   BadRequestException,
@@ -18,8 +19,9 @@ describe('ReferralsService', () => {
   let referralRepository: Repository<Referral>;
   let campaignRepository: Repository<ReferralCampaign>;
   let userRepository: Repository<User>;
-  let transactionRepository: Repository<Transaction>;
+  let processedReferralEventRepository: Repository<ProcessedReferralEvent>;
   let eventEmitter: EventEmitter2;
+  let fraudDetectionService: jest.Mocked<ReferralFraudDetectionService>;
 
   const mockUser = {
     id: 'user-1',
@@ -39,6 +41,18 @@ describe('ReferralsService', () => {
   };
 
   beforeEach(async () => {
+    fraudDetectionService = {
+      enforceCreationRateLimit: jest.fn(),
+      evaluateReferral: jest.fn().mockResolvedValue({
+        isSuspicious: false,
+        reasons: [],
+        metadata: {},
+        shouldQuarantine: false,
+      }),
+      quarantineReferral: jest.fn(),
+      buildMetadataFingerprint: jest.fn().mockReturnValue(null),
+    } as unknown as jest.Mocked<ReferralFraudDetectionService>;
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         ReferralsService,
@@ -60,15 +74,17 @@ describe('ReferralsService', () => {
           },
         },
         {
-          provide: getRepositoryToken(User),
+          provide: getRepositoryToken(ProcessedReferralEvent),
           useValue: {
             findOne: jest.fn(),
+            create: jest.fn(),
+            save: jest.fn(),
           },
         },
         {
-          provide: getRepositoryToken(Transaction),
+          provide: getRepositoryToken(User),
           useValue: {
-            find: jest.fn(),
+            findOne: jest.fn(),
           },
         },
         {
@@ -76,6 +92,10 @@ describe('ReferralsService', () => {
           useValue: {
             emit: jest.fn(),
           },
+        },
+        {
+          provide: ReferralFraudDetectionService,
+          useValue: fraudDetectionService,
         },
       ],
     }).compile();
@@ -87,10 +107,10 @@ describe('ReferralsService', () => {
     campaignRepository = module.get<Repository<ReferralCampaign>>(
       getRepositoryToken(ReferralCampaign),
     );
+    processedReferralEventRepository = module.get<
+      Repository<ProcessedReferralEvent>
+    >(getRepositoryToken(ProcessedReferralEvent));
     userRepository = module.get<Repository<User>>(getRepositoryToken(User));
-    transactionRepository = module.get<Repository<Transaction>>(
-      getRepositoryToken(Transaction),
-    );
     eventEmitter = module.get<EventEmitter2>(EventEmitter2);
   });
 
@@ -180,6 +200,44 @@ describe('ReferralsService', () => {
       await expect(
         service.applyReferralCode('ABC12345', 'user-1'),
       ).rejects.toThrow(BadRequestException);
+    });
+  });
+
+  describe('checkAndCompleteReferral', () => {
+    it('should emit a versioned referral.completed event when a referral is completed', async () => {
+      const referral = {
+        ...mockReferral,
+        refereeId: 'user-2',
+        status: ReferralStatus.PENDING,
+        referrerId: 'user-1',
+        campaignId: null,
+      };
+
+      jest
+        .spyOn(processedReferralEventRepository, 'findOne')
+        .mockResolvedValue(null);
+      jest
+        .spyOn(referralRepository, 'findOne')
+        .mockResolvedValue(referral as any);
+      jest.spyOn(referralRepository, 'save').mockResolvedValue({
+        ...referral,
+        status: ReferralStatus.COMPLETED,
+        completedAt: new Date(),
+      } as any);
+      const eventSpy = jest.spyOn(eventEmitter, 'emit');
+
+      await service.checkAndCompleteReferral('user-2', '5');
+
+      expect(eventSpy).toHaveBeenCalledWith(
+        'referral.completed',
+        expect.objectContaining({
+          eventType: 'referral.completed',
+          schemaVersion: 1,
+          referralId: 'referral-1',
+          referrerId: 'user-1',
+          refereeId: 'user-2',
+        }),
+      );
     });
   });
 

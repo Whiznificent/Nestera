@@ -1,9 +1,12 @@
 import { Controller, Get, Param, Post } from '@nestjs/common';
 import { ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import { StellarService } from './stellar.service';
 import { BalanceSyncService } from './balance-sync.service';
 import { IndexerService } from './indexer.service';
 import { TransactionDto } from './dto/transaction.dto';
+
+import { EventStreamBackpressureService } from './event-stream-backpressure.service';
 
 @ApiTags('Blockchain')
 @Controller('blockchain')
@@ -12,15 +15,18 @@ export class BlockchainController {
     private readonly stellarService: StellarService,
     private readonly balanceSyncService: BalanceSyncService,
     private readonly indexerService: IndexerService,
+    private readonly backpressureService: EventStreamBackpressureService,
   ) {}
 
   @Post('wallets/generate')
+  @Throttle({ rpc: { limit: 10, ttl: 60000 } })
   @ApiOperation({ summary: 'Generate a new Stellar keypair' })
   generateWallet() {
     return this.stellarService.generateKeypair();
   }
 
   @Get('wallets/:publicKey/transactions')
+  @Throttle({ rpc: { limit: 10, ttl: 60000 } })
   @ApiOperation({
     summary: 'Get recent on-chain transactions for a Stellar wallet',
   })
@@ -41,6 +47,7 @@ export class BlockchainController {
   }
 
   @Get('rpc/status')
+  @Throttle({ rpc: { limit: 10, ttl: 60000 } })
   @ApiOperation({
     summary: 'Get status of all configured RPC endpoints',
     description:
@@ -68,8 +75,14 @@ export class BlockchainController {
   }
 
   @Get('indexer/status')
-  @ApiOperation({ summary: 'Get contract event indexer status for monitoring dashboard' })
-  @ApiResponse({ status: 200, description: 'Indexer state including ledger position, event counts, and monitored contracts' })
+  @ApiOperation({
+    summary: 'Get contract event indexer status for monitoring dashboard',
+  })
+  @ApiResponse({
+    status: 200,
+    description:
+      'Indexer state including ledger position, event counts, and monitored contracts',
+  })
   getIndexerStatus() {
     const state = this.indexerService.getIndexerState();
     return {
@@ -79,5 +92,15 @@ export class BlockchainController {
       totalEventsFailed: state?.totalEventsFailed ?? 0,
       monitoredContracts: this.indexerService.getMonitoredContracts(),
     };
+  }
+
+  @Get('backpressure/status')
+  @ApiOperation({
+    summary: 'Get event stream backpressure status',
+    description:
+      'Queue depth, ingestion rate, and pause state for blockchain event processing',
+  })
+  async getBackpressureStatus() {
+    return this.backpressureService.getStatus();
   }
 }

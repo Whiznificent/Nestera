@@ -4,8 +4,14 @@ import { HttpService } from '@nestjs/axios';
 import { NotFoundException, ForbiddenException } from '@nestjs/common';
 import { of } from 'rxjs';
 import { WebhookService } from './webhook.service';
-import { WebhookSubscription, WebhookStatus } from './entities/webhook-subscription.entity';
-import { WebhookDelivery, DeliveryStatus } from './entities/webhook-delivery.entity';
+import {
+  WebhookSubscription,
+  WebhookStatus,
+} from './entities/webhook-subscription.entity';
+import {
+  WebhookDelivery,
+  DeliveryStatus,
+} from './entities/webhook-delivery.entity';
 
 const mockSubRepo = () => ({
   create: jest.fn(),
@@ -35,26 +41,31 @@ describe('WebhookService', () => {
   const userId = 'user-uuid-1';
   const subId = 'sub-uuid-1';
 
-  const baseSub = (): WebhookSubscription =>
-    ({
-      id: subId,
-      userId,
-      url: 'https://example.com/hooks',
-      secret: 'test-secret-key',
-      events: ['savings.deposit'],
-      status: WebhookStatus.ACTIVE,
-      description: null,
-      deliveries: [],
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    }) as WebhookSubscription;
+  const baseSub = (): WebhookSubscription => ({
+    id: subId,
+    userId,
+    url: 'https://example.com/hooks',
+    secret: 'test-secret-key',
+    events: ['savings.deposit'],
+    status: WebhookStatus.ACTIVE,
+    description: null,
+    deliveries: [],
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  });
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         WebhookService,
-        { provide: getRepositoryToken(WebhookSubscription), useFactory: mockSubRepo },
-        { provide: getRepositoryToken(WebhookDelivery), useFactory: mockDeliveryRepo },
+        {
+          provide: getRepositoryToken(WebhookSubscription),
+          useFactory: mockSubRepo,
+        },
+        {
+          provide: getRepositoryToken(WebhookDelivery),
+          useFactory: mockDeliveryRepo,
+        },
         { provide: HttpService, useFactory: mockHttpService },
       ],
     }).compile();
@@ -67,24 +78,31 @@ describe('WebhookService', () => {
 
   describe('register', () => {
     it('creates a subscription with a generated secret when none provided', async () => {
-      const dto = { url: 'https://example.com/hooks', events: ['savings.deposit'] };
+      const dto = {
+        url: 'https://example.com/hooks',
+        events: ['savings.deposit'],
+      };
       const sub = baseSub();
       subRepo.create.mockReturnValue(sub);
       subRepo.save.mockResolvedValue(sub);
 
-      const result = await service.register(userId, dto as any);
+      const result = await service.register(userId, dto);
 
       expect(subRepo.create).toHaveBeenCalled();
       expect(result).toEqual(sub);
     });
 
     it('uses provided secret if given', async () => {
-      const dto = { url: 'https://example.com/hooks', events: ['*'], secret: 'my-secret-key' };
+      const dto = {
+        url: 'https://example.com/hooks',
+        events: ['*'],
+        secret: 'my-secret-key',
+      };
       const sub = { ...baseSub(), secret: 'my-secret-key' };
       subRepo.create.mockReturnValue(sub);
       subRepo.save.mockResolvedValue(sub);
 
-      const result = await service.register(userId, dto as any);
+      const result = await service.register(userId, dto);
       expect(result.secret).toBe('my-secret-key');
     });
   });
@@ -98,12 +116,16 @@ describe('WebhookService', () => {
 
     it('throws NotFoundException when not found', async () => {
       subRepo.findOne.mockResolvedValue(null);
-      await expect(service.findOne(subId, userId)).rejects.toThrow(NotFoundException);
+      await expect(service.findOne(subId, userId)).rejects.toThrow(
+        NotFoundException,
+      );
     });
 
     it('throws ForbiddenException for wrong owner', async () => {
       subRepo.findOne.mockResolvedValue(baseSub());
-      await expect(service.findOne(subId, 'other-user')).rejects.toThrow(ForbiddenException);
+      await expect(service.findOne(subId, 'other-user')).rejects.toThrow(
+        ForbiddenException,
+      );
     });
   });
 
@@ -111,7 +133,10 @@ describe('WebhookService', () => {
     it('disables a subscription', async () => {
       const sub = baseSub();
       subRepo.findOne.mockResolvedValue(sub);
-      subRepo.save.mockResolvedValue({ ...sub, status: WebhookStatus.DISABLED });
+      subRepo.save.mockResolvedValue({
+        ...sub,
+        status: WebhookStatus.DISABLED,
+      });
 
       const result = await service.disable(subId, userId);
       expect(result.status).toBe(WebhookStatus.DISABLED);
@@ -136,7 +161,9 @@ describe('WebhookService', () => {
     });
 
     it('rejects a tampered signature', () => {
-      expect(service.verifySignature('body', 'secret', 'sha256=badhex00')).toBe(false);
+      expect(service.verifySignature('body', 'secret', 'sha256=badhex00')).toBe(
+        false,
+      );
     });
   });
 
@@ -144,12 +171,14 @@ describe('WebhookService', () => {
     it('fans out to matching active subscriptions', async () => {
       const sub = baseSub();
       subRepo.find.mockResolvedValue([sub]);
-      const delivery = { id: 'd1', attempts: 0, nextRetryAt: null } as WebhookDelivery;
+      const delivery = {
+        id: 'd1',
+        attempts: 0,
+        nextRetryAt: null,
+      } as WebhookDelivery;
       deliveryRepo.create.mockReturnValue(delivery);
       deliveryRepo.save.mockResolvedValue(delivery);
-      httpService.post.mockReturnValue(
-        of({ status: 200, data: 'ok' }),
-      );
+      httpService.post.mockReturnValue(of({ status: 200, data: 'ok' }));
 
       await service.dispatch('savings.deposit', { amount: 100 });
 
@@ -157,8 +186,7 @@ describe('WebhookService', () => {
     });
 
     it('does not dispatch to inactive subscriptions', async () => {
-      const sub = { ...baseSub(), status: WebhookStatus.DISABLED };
-      subRepo.find.mockResolvedValue([sub]);
+      subRepo.find.mockResolvedValue([]);
 
       await service.dispatch('savings.deposit', {});
 

@@ -45,7 +45,9 @@ export class WebhooksController {
   }
 
   @Get()
-  @ApiOperation({ summary: 'List all webhook subscriptions for the current user' })
+  @ApiOperation({
+    summary: 'List all webhook subscriptions for the current user',
+  })
   @ApiOkResponse({ description: 'List of webhook subscriptions' })
   async findAll(@CurrentUser('id') userId: string) {
     return this.webhookService.list(userId);

@@ -45,7 +45,11 @@ describe('DisputesController', () => {
       const result = await controller.createDispute(createDto);
 
       expect(result).toEqual(expected);
-      expect(mockDisputesService.createDispute).toHaveBeenCalledWith(createDto);
+      expect(mockDisputesService.createDispute).toHaveBeenCalledWith(
+        createDto,
+        undefined,
+        undefined,
+      );
     });
   });
 

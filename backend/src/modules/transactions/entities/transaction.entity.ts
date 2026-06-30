@@ -19,9 +19,28 @@ export enum TxType {
 }
 
 export enum TxStatus {
+  CREATED = 'CREATED',
+  PENDING_CONFIRMATION = 'PENDING_CONFIRMATION',
+  CONFIRMED = 'CONFIRMED',
   COMPLETED = 'COMPLETED',
   PENDING = 'PENDING',
   FAILED = 'FAILED',
+  REVERSED = 'REVERSED',
+  DISPUTED = 'DISPUTED',
+}
+
+export enum TransactionCategory {
+  GROCERIES = 'Groceries',
+  DINING = 'Dining',
+  TRANSPORT = 'Transport',
+  SHOPPING = 'Shopping',
+  ENTERTAINMENT = 'Entertainment',
+  UTILITIES = 'Utilities',
+  RENT = 'Rent',
+  INCOME = 'Income',
+  SAVINGS = 'Savings',
+  INVESTMENT = 'Investment',
+  OTHER = 'Other',
 }
 
 @Entity('transactions')
@@ -38,6 +57,9 @@ export class Transaction extends BaseEntity {
   @Column('uuid')
   userId: string;
 
+  @Column('uuid', { nullable: true })
+  tenantId: string | null;
+
   @Column({ type: 'enum', enum: TxType })
   type: TxType;
 
@@ -47,7 +69,7 @@ export class Transaction extends BaseEntity {
   @Column({ type: 'varchar' })
   txHash?: string | null;
 
-  @Column({ type: 'enum', enum: TxStatus, default: TxStatus.COMPLETED })
+  @Column({ type: 'enum', enum: TxStatus, default: TxStatus.CREATED })
   status?: TxStatus;
 
   @Column({ type: 'varchar', nullable: true })

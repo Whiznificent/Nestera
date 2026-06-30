@@ -9,12 +9,16 @@ export class IdempotencyService {
 
   constructor(@Inject(CACHE_MANAGER) private cacheManager: Cache) {}
 
-  async getResponse(key: string, userId: string): Promise<any | null> {
+  async getResponse(key: string, userId: string): Promise<any> {
     const fullKey = this.getFullKey(key, userId);
     return await this.cacheManager.get(fullKey);
   }
 
-  async saveResponse(key: string, userId: string, response: any): Promise<void> {
+  async saveResponse(
+    key: string,
+    userId: string,
+    response: any,
+  ): Promise<void> {
     const fullKey = this.getFullKey(key, userId);
     await this.cacheManager.set(fullKey, response, this.TTL);
   }

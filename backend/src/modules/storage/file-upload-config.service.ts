@@ -136,6 +136,17 @@ export class FileUploadConfigService {
       };
     }
 
+    // Magic-byte validation for images
+    if (fileType === 'avatar' && file.buffer) {
+      const magicResult = this.validateImageMagicBytes(
+        file.buffer,
+        file.mimetype,
+      );
+      if (!magicResult.valid) {
+        return magicResult;
+      }
+    }
+
     // Virus scanning (if enabled)
     if (this.virusScanningEnabled) {
       try {
@@ -152,6 +163,50 @@ export class FileUploadConfigService {
           error: `Virus scan failed: ${(error as Error).message}`,
         };
       }
+    }
+
+    return { valid: true };
+  }
+
+  /**
+   * Validate image content via magic bytes (not just MIME header).
+   */
+  validateImageMagicBytes(
+    buffer: Buffer,
+    mimetype: string,
+  ): { valid: boolean; error?: string } {
+    if (!buffer || buffer.length < 4) {
+      return { valid: false, error: 'File is too small to be a valid image' };
+    }
+
+    const isJpeg =
+      buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff;
+    const isPng =
+      buffer[0] === 0x89 &&
+      buffer[1] === 0x50 &&
+      buffer[2] === 0x4e &&
+      buffer[3] === 0x47;
+    const isWebp =
+      buffer.length >= 12 &&
+      buffer[0] === 0x52 &&
+      buffer[1] === 0x49 &&
+      buffer[2] === 0x46 &&
+      buffer[3] === 0x46 &&
+      buffer[8] === 0x57 &&
+      buffer[9] === 0x45 &&
+      buffer[10] === 0x42 &&
+      buffer[11] === 0x50;
+
+    const matchesMime =
+      (mimetype === 'image/jpeg' && isJpeg) ||
+      (mimetype === 'image/png' && isPng) ||
+      (mimetype === 'image/webp' && isWebp);
+
+    if (!matchesMime) {
+      return {
+        valid: false,
+        error: 'File content does not match declared image type',
+      };
     }
 
     return { valid: true };

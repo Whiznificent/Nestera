@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { NotFoundException } from '@nestjs/common';
 import { AdminUsersService } from './admin-users.service';
+import { AdminUsersQueryDto } from './dto/admin-users-query.dto';
 import { User } from '../user/entities/user.entity';
 import { UserSubscription } from '../savings/entities/user-subscription.entity';
 import { LedgerTransaction } from '../blockchain/entities/transaction.entity';
@@ -25,6 +26,7 @@ const mockUser = (overrides: Partial<User> = {}): User =>
 const makeQb = (results: any[] = [], count = 0) => ({
   andWhere: jest.fn().mockReturnThis(),
   orderBy: jest.fn().mockReturnThis(),
+  addOrderBy: jest.fn().mockReturnThis(),
   skip: jest.fn().mockReturnThis(),
   take: jest.fn().mockReturnThis(),
   select: jest.fn().mockReturnThis(),
@@ -33,6 +35,8 @@ const makeQb = (results: any[] = [], count = 0) => ({
   set: jest.fn().mockReturnThis(),
   whereInIds: jest.fn().mockReturnThis(),
   execute: jest.fn().mockResolvedValue({}),
+  getMany: jest.fn().mockResolvedValue(results),
+  getCount: jest.fn().mockResolvedValue(count),
   getManyAndCount: jest.fn().mockResolvedValue([results, count]),
   getRawOne: jest.fn().mockResolvedValue({ total: '0' }),
 });
@@ -74,12 +78,15 @@ describe('AdminUsersService', () => {
 
   describe('listUsers', () => {
     it('returns paginated data with meta', async () => {
-      const result = await service.listUsers({
+      const query = Object.assign(new AdminUsersQueryDto(), {
         page: 1,
         limit: 20,
-        skip: 0,
+        includeTotal: 'true',
       });
-      expect(result.meta).toEqual({ total: 1, page: 1, limit: 20 });
+      const result = await service.listUsers(query);
+      expect(result.meta.page).toBe(1);
+      expect(result.meta.limit).toBe(20);
+      expect(result.meta.totalItemCount).toBe(1);
       expect(result.data).toHaveLength(1);
       expect(result.data[0].email).toBe('test@nestera.io');
     });
@@ -94,8 +101,8 @@ describe('AdminUsersService', () => {
         page: 1,
         limit: 20,
         skip: 0,
-      });
-      expect(result.data[0].transactionCount).toBe(10);
+      } as any);
+      expect(result.items[0].transactionCount).toBe(10);
     });
   });
 

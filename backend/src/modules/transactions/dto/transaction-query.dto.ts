@@ -1,81 +1,68 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { Type, Transform } from 'class-transformer';
+import { Type } from 'class-transformer';
 import {
+  IsBooleanString,
+  IsInt,
   IsOptional,
-  IsEnum,
-  IsDateString,
-  IsArray,
   IsString,
+  Max,
+  Min,
 } from 'class-validator';
-import { PageOptionsDto } from '../../../common/dto/page-options.dto';
-import { LedgerTransactionType } from '../../blockchain/entities/transaction.entity';
+import {
+  DEFAULT_PAGE_SIZE,
+  MAX_PAGE_SIZE,
+  PageOptionsDto,
+} from '../../../common/dto/page-options.dto';
+import { TransactionSearchCriteriaDto } from './transaction-search-criteria.dto';
 
-export class TransactionQueryDto extends PageOptionsDto {
-  @ApiPropertyOptional({
-    description: 'Filter by transaction types (comma-separated)',
-    example: 'DEPOSIT,YIELD',
-    enum: LedgerTransactionType,
-    isArray: true,
-  })
+export class TransactionQueryDto extends TransactionSearchCriteriaDto {
+  @ApiPropertyOptional({ minimum: 1, default: 1, example: 1 })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
   @IsOptional()
-  @Transform(({ value }) => {
-    if (typeof value === 'string') {
-      return value.split(',').map((v) => v.trim());
-    }
-    return value;
-  })
-  @IsArray()
-  @IsEnum(LedgerTransactionType, { each: true })
-  readonly type?: LedgerTransactionType[];
+  page?: PageOptionsDto['page'] = 1;
 
   @ApiPropertyOptional({
-    description: 'Filter by start date (ISO 8601 format)',
-    example: '2024-01-01T00:00:00.000Z',
+    minimum: 1,
+    maximum: MAX_PAGE_SIZE,
+    default: DEFAULT_PAGE_SIZE,
+    example: DEFAULT_PAGE_SIZE,
   })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(MAX_PAGE_SIZE)
   @IsOptional()
-  @IsDateString()
-  readonly startDate?: string;
+  limit?: PageOptionsDto['limit'] = DEFAULT_PAGE_SIZE;
 
   @ApiPropertyOptional({
-    description: 'Filter by end date (ISO 8601 format)',
-    example: '2024-12-31T23:59:59.999Z',
-  })
-  @IsOptional()
-  @IsDateString()
-  readonly endDate?: string;
-
-  @ApiPropertyOptional({
-    description: 'Filter by pool ID',
-    example: 'pool-uuid-here',
-  })
-  @IsOptional()
-  readonly poolId?: string;
-
-  @ApiPropertyOptional({
-    description: 'Filter by category',
-    example: 'Groceries',
+    description: 'Opaque cursor for cursor-based pagination',
+    example: 'eyJpZCI6IDEwfQ==',
   })
   @IsOptional()
   @IsString()
-  readonly category?: string;
+  cursor?: string;
 
   @ApiPropertyOptional({
-    description: 'Filter by tags (comma-separated or array)',
-    example: 'food,groceries',
-    isArray: true,
+    description: 'Set to true to include totalCount metadata',
+    default: false,
+    example: false,
   })
   @IsOptional()
-  @Transform(({ value }) => {
-    if (!value) return undefined;
-    if (typeof value === 'string') {
-      return value
-        .split(',')
-        .map((v) => v.trim())
-        .filter(Boolean);
-    }
-    return Array.isArray(value) ? value : undefined;
-  })
-  @IsArray()
-  @IsString({ each: true })
-  readonly tags?: string[];
+  @IsBooleanString()
+  includeTotal?: string;
+
+  get pageSize(): number {
+    const candidate = this.limit ?? DEFAULT_PAGE_SIZE;
+    return Math.min(Math.max(candidate, 1), MAX_PAGE_SIZE);
+  }
+
+  get skip(): number {
+    return ((this.page ?? 1) - 1) * this.pageSize;
+  }
+
+  get shouldIncludeTotal(): boolean {
+    return String(this.includeTotal).toLowerCase() === 'true';
+  }
 }

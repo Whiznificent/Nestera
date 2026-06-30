@@ -17,8 +17,10 @@ import {
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
+import { AdminHighRisk } from '../../common/decorators/admin-high-risk.decorator';
 import { Role } from '../../common/enums/role.enum';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { Idempotent } from '../../common/decorators/idempotent.decorator';
 import { User } from '../user/entities/user.entity';
 import { AdminWithdrawalService } from './admin-withdrawal.service';
 import { PageOptionsDto } from '../../common/dto/page-options.dto';
@@ -65,12 +67,18 @@ export class AdminWithdrawalController {
   }
 
   @Post(':id/approve')
-  @ApiOperation({ summary: 'Approve a pending withdrawal request' })
+  @AdminHighRisk()
+  @Idempotent({ ttlSeconds: 86400 })
+  @ApiOperation({
+    summary: 'Approve a pending withdrawal request',
+    description: 'High-risk operation. Requires confirmation on first attempt.',
+  })
   @ApiResponse({ status: 200, description: 'Withdrawal request approved' })
   @ApiResponse({
     status: 400,
     description: 'Withdrawal request is not in PENDING status',
   })
+  @ApiResponse({ status: 403, description: 'Confirmation required' })
   @ApiResponse({ status: 404, description: 'Withdrawal request not found' })
   async approve(
     @Param('id', ParseUUIDPipe) id: string,
@@ -80,13 +88,19 @@ export class AdminWithdrawalController {
   }
 
   @Post(':id/reject')
-  @ApiOperation({ summary: 'Reject a pending withdrawal request' })
+  @AdminHighRisk()
+  @Idempotent({ ttlSeconds: 86400 })
+  @ApiOperation({
+    summary: 'Reject a pending withdrawal request',
+    description: 'High-risk operation. Requires confirmation on first attempt.',
+  })
   @ApiResponse({ status: 200, description: 'Withdrawal request rejected' })
   @ApiResponse({
     status: 400,
     description:
       'Withdrawal request is not in PENDING status or invalid reason',
   })
+  @ApiResponse({ status: 403, description: 'Confirmation required' })
   @ApiResponse({ status: 404, description: 'Withdrawal request not found' })
   async reject(
     @Param('id', ParseUUIDPipe) id: string,

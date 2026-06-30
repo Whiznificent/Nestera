@@ -1,8 +1,8 @@
-"use client";
+'use client';
 
-import React from "react";
-import { AlertTriangle, HelpCircle, Rocket, Server, Shield } from "lucide-react";
-import { getNetworkConfig, type StellarNetwork } from "../../constants/networks";
+import React from 'react';
+import { AlertTriangle, HelpCircle, Rocket, Server, Shield } from 'lucide-react';
+import { getNetworkConfig, type StellarNetwork } from '../../constants/networks';
 
 export interface NetworkBadgeProps {
   network: StellarNetwork;
@@ -19,7 +19,7 @@ const NETWORK_ICONS: Record<string, React.ComponentType<{ size?: number; classNa
 };
 
 export const NetworkBadge: React.FC<NetworkBadgeProps> = React.memo(
-  ({ network, onClick, className = "" }) => {
+  ({ network, onClick, className = '' }) => {
     const config = getNetworkConfig(network);
     const IconComponent = NETWORK_ICONS[config.icon] || HelpCircle;
     const ariaLabel = config.showWarning
@@ -31,32 +31,33 @@ export const NetworkBadge: React.FC<NetworkBadgeProps> = React.memo(
         <button
           role="button"
           aria-label={ariaLabel}
-          aria-describedby={config.showWarning ? "testnet-warning" : undefined}
+          aria-describedby={config.showWarning ? 'testnet-warning' : undefined}
           onClick={onClick}
           className={[
-            "network-badge-responsive relative flex items-center justify-center gap-[6px] rounded-xl border p-0",
-            "cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--color-background)] hover:opacity-90",
-            config.showWarning ? "animate-pulse-subtle" : "",
+            'network-badge-responsive relative flex items-center justify-center gap-[6px] rounded-xl border p-0',
+            'cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--color-background)] hover:opacity-90',
+            config.showWarning ? 'animate-pulse-subtle' : '',
             className,
-          ].join(" ")}
+          ].join(' ')}
           style={{
             backgroundColor: config.colors.background,
             borderColor: config.colors.border,
             color: config.colors.primary,
-            width: "32px",
-            height: "32px",
+            width: '32px',
+            height: '32px',
           }}
         >
           <IconComponent size={14} className="shrink-0" />
           <span
             className="hidden whitespace-nowrap text-xs font-semibold sm:inline"
-            style={{ color: config.colors.text, letterSpacing: "0.3px" }}
+            style={{ color: config.colors.text, letterSpacing: '0.3px' }}
           >
             {config.displayName}
           </span>
           {config.showWarning ? (
             <span id="testnet-warning" className="sr-only">
-              Warning: You are connected to the test network. Transactions will not affect real assets.
+              Warning: You are connected to the test network. Transactions will not affect real
+              assets.
             </span>
           ) : null}
           {config.showWarning ? (
@@ -64,7 +65,7 @@ export const NetworkBadge: React.FC<NetworkBadgeProps> = React.memo(
               className="absolute -top-0.5 -right-0.5 h-1.5 w-1.5 rounded-full border sm:hidden"
               style={{
                 backgroundColor: config.colors.primary,
-                borderColor: "var(--color-surface)",
+                borderColor: 'var(--color-surface)',
               }}
               aria-hidden="true"
             />
@@ -109,9 +110,9 @@ export const NetworkBadge: React.FC<NetworkBadgeProps> = React.memo(
       </>
     );
   },
-  (prevProps, nextProps) => prevProps.network === nextProps.network
+  (prevProps, nextProps) => prevProps.network === nextProps.network,
 );
 
-NetworkBadge.displayName = "NetworkBadge";
+NetworkBadge.displayName = 'NetworkBadge';
 
 export default NetworkBadge;

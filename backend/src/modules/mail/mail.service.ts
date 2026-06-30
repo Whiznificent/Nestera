@@ -263,4 +263,60 @@ export class MailService {
       );
     }
   }
+
+  async sendBadgeEarnedEmail(
+    userEmail: string,
+    name: string,
+    badgeName: string,
+    points: number,
+  ): Promise<void> {
+    try {
+      await this.mailerService.sendMail({
+        to: userEmail,
+        subject: `You earned the "${badgeName}" badge!`,
+        template: './badge-earned',
+        context: {
+          name: name || 'User',
+          badgeName,
+          points,
+        },
+      });
+      this.logger.log(`Badge earned email sent to ${userEmail}`);
+    } catch (error) {
+      this.logger.error(
+        `Failed to send badge earned email to ${userEmail}`,
+        error,
+      );
+    }
+  }
+
+  async sendReportEmail(
+    userEmail: string,
+    name: string,
+    reportType: string,
+    periodLabel: string,
+    attachment: Buffer,
+    filename: string,
+  ): Promise<void> {
+    try {
+      await this.mailerService.sendMail({
+        to: userEmail,
+        subject: `Your ${reportType.replace(/_/g, ' ')} report — ${periodLabel}`,
+        template: './savings-alert',
+        context: {
+          name: name || 'User',
+          message: `Your scheduled ${reportType.replace(/_/g, ' ').toLowerCase()} report for ${periodLabel} is attached.`,
+        },
+        attachments: [
+          {
+            filename,
+            content: attachment,
+          },
+        ],
+      });
+      this.logger.log(`Report email sent to ${userEmail}`);
+    } catch (error) {
+      this.logger.error(`Failed to send report email to ${userEmail}`, error);
+    }
+  }
 }

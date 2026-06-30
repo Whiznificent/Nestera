@@ -10,6 +10,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as crypto from 'crypto';
+import { Idempotent } from '../../common/decorators/idempotent.decorator';
 
 @Controller('webhooks/stellar')
 export class StellarWebhookController {
@@ -19,6 +20,7 @@ export class StellarWebhookController {
 
   @Post()
   @HttpCode(HttpStatus.OK)
+  @Idempotent({ ttlSeconds: 86400 })
   async handleWebhook(
     @Body() payload: any,
     @Headers('x-stellar-signature') signature?: string,
@@ -75,14 +77,9 @@ export class StellarWebhookController {
       transaction_hash,
     } = payload;
 
-    this.logger.log(`Processing ${type}:
-      Hash: ${transaction_hash}
-      From: ${from}
-      To: ${to}
-      Amount: ${amount} ${asset_code || 'XLM'}
-      Issuer: ${asset_issuer || 'native'}
-    `);
+    this.logger.log(`Processing ${type}:\n      Hash: ${transaction_hash}\n      From: ${from}\n      To: ${to}\n      Amount: ${amount} ${asset_code || 'XLM'}\n      Issuer: ${asset_issuer || 'native'}\n    `);
 
     // TODO: Add further logic here (e.g., updating database, notifying user)
   }
 }
+

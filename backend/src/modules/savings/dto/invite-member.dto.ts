@@ -1,4 +1,10 @@
-import { IsUUID, IsNotEmpty } from 'class-validator';
+import {
+  IsUUID,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  MaxLength,
+} from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class InviteMemberDto {
@@ -9,4 +15,14 @@ export class InviteMemberDto {
   @IsUUID('4', { message: 'A valid User UUID is required' })
   @IsNotEmpty({ message: 'User ID is required' })
   userId: string;
+
+  @ApiProperty({
+    example: 'Join our savings circle!',
+    required: false,
+    description: 'Optional message to include with the invitation',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  message?: string;
 }

@@ -1,6 +1,6 @@
-"use client";
+'use client';
 
-import React from "react";
+import React from 'react';
 
 export interface PoolItem {
   id: number;
@@ -12,19 +12,17 @@ export interface PoolItem {
 }
 
 const ActivePoolCard: React.FC<{ pool: PoolItem }> = ({ pool }) => {
-  const initials = pool.title.split(" ")[0].slice(0, 2).toUpperCase();
+  const initials = pool.title.split(' ')[0].slice(0, 2).toUpperCase();
 
   return (
-    <div className="flex items-center gap-4 p-3.5 bg-[rgba(3,12,14,0.12)] rounded-xl border border-white/2">
+    <div className="card-hover flex items-center gap-4 p-3.5 bg-[rgba(3,12,14,0.12)] rounded-xl border border-white/2">
       <div className="flex items-center gap-3 min-w-[200px]">
         <div className="w-11 h-11 rounded-[10px] bg-linear-to-b from-[#063d3d] to-[#0a6f6f] flex items-center justify-center font-bold text-[#dff] shrink-0">
           {initials}
         </div>
         <div className="flex flex-col">
           <div className="font-bold text-[#dff]">{pool.title}</div>
-          <div className="text-[#90b4b4] text-[13px] mt-0.5">
-            {pool.subtitle}
-          </div>
+          <div className="text-[#90b4b4] text-[13px] mt-0.5">{pool.subtitle}</div>
         </div>
       </div>
 

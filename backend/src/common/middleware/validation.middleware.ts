@@ -99,7 +99,9 @@ export class RequestValidationMiddleware implements NestMiddleware {
 
     // Reject requests with null bytes in any header
     for (const [name, value] of Object.entries(req.headers)) {
-      const headerStr = Array.isArray(value) ? value.join(',') : (value as string);
+      const headerStr = Array.isArray(value)
+        ? value.join(',')
+        : (value as string);
       if (headerStr && headerStr.includes('\0')) {
         throw new BadRequestException(`Invalid character in header '${name}'`);
       }

@@ -4,23 +4,30 @@ import {
   MinLength,
   MaxLength,
   IsOptional,
+  Matches,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsStellarPublicKey } from '../../common/validators/is-stellar-key.validator';
+import { IsStrongPassword } from '../../common/validators/is-strong-password.validator';
+import { Trim } from '../../common/validators/sanitize.transform';
 
 export class RegisterDto {
   @ApiProperty({ example: 'alice@example.com' })
+  @Trim()
   @IsEmail()
   email: string;
 
   @ApiProperty({ example: 'supersecret123' })
   @IsString()
   @MinLength(8)
-  @MaxLength(32)
+  @MaxLength(72, { message: 'password must not exceed 72 characters' })
+  @IsStrongPassword()
   password: string;
 
   @ApiProperty({ example: 'Alice', required: false })
   @IsString()
+  @Trim()
+  @MaxLength(255)
   name?: string;
 
   @ApiPropertyOptional({
@@ -29,6 +36,10 @@ export class RegisterDto {
   })
   @IsOptional()
   @IsString()
+  @Trim()
+  @Matches(/^[A-Z0-9]{4,12}$/, {
+    message: 'referralCode must be 4-12 uppercase alphanumeric characters',
+  })
   referralCode?: string;
 }
 

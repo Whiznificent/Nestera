@@ -5,6 +5,7 @@ import {
   IsOptional,
   IsObject,
   Min,
+  Max,
   MaxLength,
   IsNotEmpty,
 } from 'class-validator';
@@ -13,8 +14,8 @@ import { ApiProperty } from '@nestjs/swagger';
 import { ApiExample } from '../../../common/decorators/api-example.decorator';
 import { SavingsGoalMetadata } from '../entities/savings-goal.entity';
 import { IsFutureDate } from '../../../common/validators/is-future-date.validator';
-import { Trim } from '../../../common/decorators/trim.decorator';
 import { IsPositiveAmount } from '../../../common/validators/is-positive-amount.validator';
+import { Trim } from '../../../common/validators/sanitize.transform';
 
 export class CreateGoalDto {
   @ApiProperty({
@@ -24,8 +25,8 @@ export class CreateGoalDto {
     maxLength: 255,
   })
   @IsString()
-  @IsNotEmpty({ message: 'Goal name is required' })
   @Trim()
+  @IsNotEmpty({ message: 'Goal name is required' })
   @MaxLength(255, { message: 'Goal name must not exceed 255 characters' })
   goalName: string;
 
@@ -35,8 +36,13 @@ export class CreateGoalDto {
     minimum: 0.01,
   })
   @IsNumber({}, { message: 'Target amount must be a valid number' })
-  @IsPositiveAmount()
   @Min(0.01, { message: 'Target amount must be at least 0.01 XLM' })
+  @IsPositiveAmount(7, {
+    message: 'Target amount must be positive with at most 7 decimal places',
+  })
+  @Max(1_000_000_000, {
+    message: 'Target amount must not exceed 1,000,000,000',
+  })
   targetAmount: number;
 
   @ApiProperty({

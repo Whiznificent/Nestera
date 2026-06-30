@@ -112,6 +112,14 @@ export class MilestoneService {
         bonusPoints: milestone.bonusPoints,
         achievedAt: milestone.achievedAt,
       });
+
+      // Also emit goal-specific event for badge system
+      this.eventEmitter.emit('goal.milestone', {
+        userId,
+        goalId,
+        percentage: milestone.percentage,
+        goalName: '', // Will be filled by caller
+      });
     }
 
     return saved;

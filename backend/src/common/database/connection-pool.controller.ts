@@ -20,8 +20,14 @@ export class ConnectionPoolController {
   ) {}
 
   @Get('summary')
-  @ApiOperation({ summary: 'Get connection pool summary with utilization trends' })
-  @ApiResponse({ status: 200, description: 'Pool summary including current metrics, averages, and acquisition latency' })
+  @ApiOperation({
+    summary: 'Get connection pool summary with utilization trends',
+  })
+  @ApiResponse({
+    status: 200,
+    description:
+      'Pool summary including current metrics, averages, and acquisition latency',
+  })
   getSummary() {
     return this.poolService.getPoolSummary();
   }

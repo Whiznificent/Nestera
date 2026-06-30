@@ -5,7 +5,7 @@ import { PageDto } from '../dto/page.dto';
 
 /**
  * Applies pagination to a TypeORM SelectQueryBuilder and returns
- * a typed PageDto with data and metadata.
+ * a typed PageDto with items and metadata.
  *
  * @example
  * const query = this.userRepository.createQueryBuilder('user');
@@ -15,18 +15,19 @@ export async function paginate<T extends ObjectLiteral>(
   queryBuilder: SelectQueryBuilder<T>,
   pageOptionsDto: PageOptionsDto,
 ): Promise<PageDto<T>> {
-  const { skip, limit, order } = pageOptionsDto;
+  const { skip, order, pageSize } = pageOptionsDto;
 
   queryBuilder
     .orderBy(`${queryBuilder.alias}.createdAt`, order)
+    .addOrderBy(`${queryBuilder.alias}.id`, order)
     .skip(skip)
-    .take(limit);
+    .take(pageSize);
 
-  const [data, totalItemCount] = await queryBuilder.getManyAndCount();
+  const [items, totalItemCount] = await queryBuilder.getManyAndCount();
 
   const meta = new PageMetaDto({ pageOptionsDto, totalItemCount });
 
-  return new PageDto(data, meta);
+  return new PageDto(items, meta);
 }
 
 /**
@@ -43,6 +44,6 @@ export function getSkipTake(pageOptionsDto: PageOptionsDto): {
 } {
   return {
     skip: pageOptionsDto.skip,
-    take: pageOptionsDto.limit ?? 10,
+    take: pageOptionsDto.pageSize,
   };
 }

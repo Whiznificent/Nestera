@@ -4,82 +4,154 @@ import {
   IsEnum,
   IsString,
   Matches,
-  ValidateIf,
 } from 'class-validator';
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { DigestFrequency } from '../entities/notification-preference.entity';
+import {
+  DigestFrequency,
+  ProfileVisibility,
+  ThemePreference,
+  DateFormatPreference,
+  PreferredContactChannel,
+} from '../entities/notification-preference.entity';
 
-export class UpdateNotificationPreferenceDto {
+export class UpdateUserPreferenceDto {
   // Channel preferences
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ example: true })
   @IsOptional()
   @IsBoolean()
   emailNotifications?: boolean;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ example: true })
   @IsOptional()
   @IsBoolean()
   inAppNotifications?: boolean;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ example: true })
   @IsOptional()
   @IsBoolean()
   pushNotifications?: boolean;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ example: false })
   @IsOptional()
   @IsBoolean()
   smsNotifications?: boolean;
 
+  @ApiPropertyOptional({ enum: PreferredContactChannel, example: PreferredContactChannel.EMAIL })
+  @IsOptional()
+  @IsEnum(PreferredContactChannel)
+  preferredContactChannel?: PreferredContactChannel;
+
   // Notification type preferences
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ example: true })
   @IsOptional()
   @IsBoolean()
   depositNotifications?: boolean;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ example: true })
   @IsOptional()
   @IsBoolean()
   withdrawalNotifications?: boolean;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ example: true })
   @IsOptional()
   @IsBoolean()
   goalNotifications?: boolean;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ example: true })
   @IsOptional()
   @IsBoolean()
   governanceNotifications?: boolean;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ example: false })
   @IsOptional()
   @IsBoolean()
   marketingNotifications?: boolean;
 
-  // Legacy
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ example: true })
   @IsOptional()
   @IsBoolean()
   sweepNotifications?: boolean;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ example: true })
   @IsOptional()
   @IsBoolean()
   claimNotifications?: boolean;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ example: true })
   @IsOptional()
   @IsBoolean()
   yieldNotifications?: boolean;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ example: true })
   @IsOptional()
   @IsBoolean()
   milestoneNotifications?: boolean;
 
+  @ApiPropertyOptional({ example: true })
+  @IsOptional()
+  @IsBoolean()
+  newsletterSubscribed?: boolean;
+
+  // Privacy preferences
+  @ApiPropertyOptional({ enum: ProfileVisibility, example: ProfileVisibility.FRIENDS })
+  @IsOptional()
+  @IsEnum(ProfileVisibility)
+  profileVisibility?: ProfileVisibility;
+
+  @ApiPropertyOptional({ example: true })
+  @IsOptional()
+  @IsBoolean()
+  dataSharingEnabled?: boolean;
+
+  @ApiPropertyOptional({ example: false })
+  @IsOptional()
+  @IsBoolean()
+  personalizedAds?: boolean;
+
+  @ApiPropertyOptional({ example: true })
+  @IsOptional()
+  @IsBoolean()
+  locationSharing?: boolean;
+
+  // Display preferences
+  @ApiPropertyOptional({ enum: ThemePreference, example: ThemePreference.LIGHT })
+  @IsOptional()
+  @IsEnum(ThemePreference)
+  theme?: ThemePreference;
+
+  @ApiPropertyOptional({ example: 'en' })
+  @IsOptional()
+  @IsString()
+  @Matches(/^[a-z]{2}(-[A-Z]{2})?$/, {
+    message: 'language must be a valid locale code',
+  })
+  language?: string;
+
+  @ApiPropertyOptional({ example: 'USD' })
+  @IsOptional()
+  @IsString()
+  @Matches(/^[A-Z]{3}$/, {
+    message: 'currency must be a 3-letter ISO code',
+  })
+  currency?: string;
+
+  @ApiPropertyOptional({ enum: DateFormatPreference, example:DateFormatPreference.MM_DD_YYYY })
+  @IsOptional()
+  @IsEnum(DateFormatPreference)
+  dateFormat?: DateFormatPreference;
+
+  @ApiPropertyOptional({ example: false })
+  @IsOptional()
+  @IsBoolean()
+  compactLayout?: boolean;
+
+  @ApiPropertyOptional({ example: true })
+  @IsOptional()
+  @IsBoolean()
+  displayBalancesInFiat?: boolean;
+
   // Quiet hours
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ example: true })
   @IsOptional()
   @IsBoolean()
   quietHoursEnabled?: boolean;
@@ -106,7 +178,7 @@ export class UpdateNotificationPreferenceDto {
   timezone?: string;
 
   // Digest frequency
-  @ApiPropertyOptional({ enum: DigestFrequency })
+  @ApiPropertyOptional({ enum: DigestFrequency, example: DigestFrequency.DAILY })
   @IsOptional()
   @IsEnum(DigestFrequency)
   digestFrequency?: DigestFrequency;

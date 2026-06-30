@@ -1,9 +1,9 @@
 /**
  * Network Configuration Constants and Types
- * 
+ *
  * This file defines the types and configurations for Stellar network support,
  * including visual styling, display properties, and utility functions.
- * 
+ *
  * Validates Requirements: 1.1, 1.3, 3.1, 3.2, 3.3, 3.4
  */
 
@@ -20,31 +20,31 @@ export type StellarNetwork = 'MAINNET' | 'TESTNET' | 'FUTURENET' | 'STANDALONE';
 export interface NetworkConfig {
   /** The network identifier */
   name: StellarNetwork;
-  
+
   /** Human-readable network name for display */
   displayName: string;
-  
+
   /** Network-specific color scheme */
   colors: {
     /** Primary brand color for the network */
     primary: string;
-    
+
     /** Secondary/darker shade for accents */
     secondary: string;
-    
+
     /** Background color with transparency */
     background: string;
-    
+
     /** Border color */
     border: string;
-    
+
     /** Text color for labels */
     text: string;
   };
-  
+
   /** Icon identifier for the network (e.g., 'Shield', 'AlertTriangle') */
   icon: string;
-  
+
   /** Whether to display warning indicators for this network */
   showWarning: boolean;
 }
@@ -128,17 +128,17 @@ const UNKNOWN_NETWORK_CONFIG: NetworkConfig = {
 
 /**
  * Get network configuration for a given network string
- * 
+ *
  * @param network - The network identifier string (case-insensitive)
  * @returns NetworkConfig object for the specified network
- * 
+ *
  * @example
  * ```typescript
  * const config = getNetworkConfig('MAINNET');
  * console.log(config.displayName); // "Mainnet"
  * console.log(config.colors.primary); // "#08c1c1"
  * ```
- * 
+ *
  * @example
  * ```typescript
  * // Handles unknown networks gracefully
@@ -172,13 +172,12 @@ export function getNetworkConfig(network: string): NetworkConfig {
   return UNKNOWN_NETWORK_CONFIG;
 }
 
-
 /**
  * Type guard to check if a string is a valid StellarNetwork
- * 
+ *
  * @param network - The network string to validate
  * @returns True if the network is a valid StellarNetwork type
- * 
+ *
  * @example
  * ```typescript
  * if (isValidNetwork('MAINNET')) {

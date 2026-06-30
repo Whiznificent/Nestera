@@ -10,6 +10,10 @@ import { StellarService } from './stellar.service';
 import { DepositHandler } from './event-handlers/deposit.handler';
 import { WithdrawHandler } from './event-handlers/withdraw.handler';
 import { YieldHandler } from './event-handlers/yield.handler';
+import { IndexerCheckpointService } from './indexer-checkpoint.service';
+import { DistributedLockService } from '../../common/distributed-lock/distributed-lock.service';
+import { EventStreamBackpressureService } from './event-stream-backpressure.service';
+import { JobQueueService } from '../job-queue/job-queue.service';
 
 describe('IndexerService (DLQ Integration)', () => {
   let service: IndexerService;
@@ -68,6 +72,48 @@ describe('IndexerService (DLQ Integration)', () => {
         { provide: DepositHandler, useValue: depositHandler },
         { provide: WithdrawHandler, useValue: withdrawHandler },
         { provide: YieldHandler, useValue: yieldHandler },
+        {
+          provide: IndexerCheckpointService,
+          useValue: {
+            loadOrCreateState: jest.fn().mockResolvedValue({
+              lastProcessedLedger: 100,
+              totalEventsProcessed: 0,
+              totalEventsFailed: 0,
+              streamId: 'savings-indexer',
+            }),
+            persistAfterSuccessfulEvent: jest
+              .fn()
+              .mockImplementation(async (input) => ({
+                lastProcessedLedger: input.lastProcessedLedger,
+                totalEventsProcessed: input.totalEventsProcessed ?? 1,
+                totalEventsFailed: input.totalEventsFailed ?? 0,
+              })),
+            recordFailure: jest.fn(),
+            isEventProcessed: jest.fn().mockResolvedValue(false),
+          },
+        },
+        {
+          provide: DistributedLockService,
+          useValue: {
+            acquireLock: jest.fn().mockResolvedValue({
+              release: jest.fn(),
+            }),
+          },
+        },
+        {
+          provide: EventStreamBackpressureService,
+          useValue: {
+            shouldPauseIngestion: jest.fn().mockResolvedValue(false),
+            canIngestEvents: jest.fn().mockReturnValue(true),
+            getStatus: jest.fn(),
+          },
+        },
+        {
+          provide: JobQueueService,
+          useValue: {
+            addBlockchainJob: jest.fn().mockResolvedValue(undefined),
+          },
+        },
       ],
     }).compile();
 

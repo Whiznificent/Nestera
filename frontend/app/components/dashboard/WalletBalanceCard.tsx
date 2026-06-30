@@ -1,18 +1,17 @@
-"use client";
+'use client';
 
-import React from "react";
-import { useWallet } from "../../context/WalletContext";
-import { Loader2, Wallet, ArrowUpRight } from "lucide-react";
-import { Button } from "../ui/Button";
-import { useWalletBalances } from "../../hooks/useWalletCache";
-import { env } from "../../lib/env";
-import Skeleton from "../ui/Skeleton";
+import React from 'react';
+import { useWallet } from '../../context/WalletContext';
+import { Loader2, Wallet, ArrowUpRight } from 'lucide-react';
+import { Button } from '../ui/Button';
+import { useWalletBalances } from '../../hooks/useWalletCache';
+import { env } from '../../lib/env';
+import Skeleton from '../ui/Skeleton';
 
 const WalletBalanceCard: React.FC = () => {
   const { address, network, isConnected, isLoading } = useWallet();
 
-  const horizonUrl =
-    network?.toLowerCase() === "public" ? env.horizonPublic : env.horizonTestnet;
+  const horizonUrl = network?.toLowerCase() === 'public' ? env.horizonPublic : env.horizonTestnet;
 
   const {
     data: balances = [],
@@ -46,7 +45,7 @@ const WalletBalanceCard: React.FC = () => {
   const totalUsdValue = balances.reduce((acc, curr) => acc + curr.usd_value, 0);
 
   return (
-    <div className="bg-[#0e2330] border border-white/5 rounded-2xl p-6 relative overflow-hidden">
+    <div className="card-hover bg-[#0e2330] border border-white/5 rounded-2xl p-6 relative overflow-hidden">
       {isBalancesLoading ? (
         <div className="absolute top-0 left-0 h-1 w-full bg-[#08c1c1]/40 animate-pulse" />
       ) : null}
@@ -57,7 +56,11 @@ const WalletBalanceCard: React.FC = () => {
           </div>
           <h3 className="text-white font-bold text-lg m-0">Wallet Assets</h3>
         </div>
-        <Button variant="ghost" size="sm" className="text-[#08c1c1] text-xs font-semibold hover:underline flex items-center gap-1 transition-all">
+        <Button
+          variant="ghost"
+          size="sm"
+          className="text-[#08c1c1] text-xs font-semibold hover:underline flex items-center gap-1 transition-all"
+        >
           Manage Assets <ArrowUpRight size={14} />
         </Button>
       </div>
@@ -81,7 +84,7 @@ const WalletBalanceCard: React.FC = () => {
         ) : (
           balances.map((asset) => (
             <div
-              key={`${asset.asset_code}-${asset.asset_issuer || "native"}`}
+              key={`${asset.asset_code}-${asset.asset_issuer || 'native'}`}
               className="flex items-center justify-between p-4 rounded-xl bg-white/[0.02] border border-white/[0.05] hover:bg-white/[0.04] transition-colors"
             >
               <div className="flex items-center gap-3">
@@ -91,16 +94,22 @@ const WalletBalanceCard: React.FC = () => {
                 <div>
                   <div className="text-white font-semibold">{asset.asset_code}</div>
                   <div className="text-[#6a9fae] text-xs">
-                    {asset.asset_type === "native" ? "Native Asset" : "Token"}
+                    {asset.asset_type === 'native' ? 'Native Asset' : 'Token'}
                   </div>
                 </div>
               </div>
               <div className="text-right">
                 <div className="text-white font-bold">
-                  {parseFloat(asset.balance).toLocaleString(undefined, { maximumFractionDigits: 4 })}
+                  {parseFloat(asset.balance).toLocaleString(undefined, {
+                    maximumFractionDigits: 4,
+                  })}
                 </div>
                 <div className="text-[#08c1c1] text-xs font-medium">
-                  ${asset.usd_value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  $
+                  {asset.usd_value.toLocaleString(undefined, {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                  })}
                 </div>
               </div>
             </div>
@@ -117,7 +126,11 @@ const WalletBalanceCard: React.FC = () => {
         <div className="flex items-center justify-between text-sm">
           <span className="text-[#6a9fae]">Total Wallet Value</span>
           <span className="text-white font-bold">
-            ${totalUsdValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            $
+            {totalUsdValue.toLocaleString(undefined, {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2,
+            })}
           </span>
         </div>
       </div>

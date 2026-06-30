@@ -1,8 +1,12 @@
-import { DashboardCardSkeleton, PoolCardSkeleton } from "../components/ui/LoadingState";
+import { DashboardCardSkeleton, PoolCardSkeleton } from '../components/ui/LoadingState';
 
 export default function GoalsLoading() {
   return (
-    <div className="w-full max-w-7xl mx-auto px-6 md:px-8 pb-16" aria-busy="true" aria-label="Loading goals">
+    <div
+      className="w-full max-w-7xl mx-auto px-6 md:px-8 pb-16"
+      aria-busy="true"
+      aria-label="Loading goals"
+    >
       <div className="mt-10 mb-6">
         <DashboardCardSkeleton />
       </div>

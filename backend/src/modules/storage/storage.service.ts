@@ -1,35 +1,102 @@
 import { Injectable, InternalServerErrorException } from '@nestjs/common';
-import { existsSync, mkdirSync, writeFileSync } from 'fs';
-import { join, extname } from 'path';
+import { extname } from 'path';
 import { randomUUID } from 'crypto';
+import { StorageAccessService } from './storage-access.service';
 
 @Injectable()
 export class StorageService {
-  private readonly uploadDir = './uploads';
+  constructor(private readonly storageAccess: StorageAccessService) {}
 
-  constructor() {
-    this.ensureUploadDirExists();
+  toStorageKey(storagePath: string): string {
+    return storagePath.startsWith('/uploads/')
+      ? storagePath.slice('/uploads/'.length)
+      : storagePath;
   }
 
-  private ensureUploadDirExists() {
-    if (!existsSync(this.uploadDir)) {
-      mkdirSync(this.uploadDir, { recursive: true });
-    }
+  readFileBuffer(storagePath: string): Buffer {
+    return this.storageAccess.readLocalFile(this.toStorageKey(storagePath));
   }
 
-  async saveFile(file: any): Promise<string> {
+  async saveFile(
+    file: { originalname: string; buffer: Buffer; mimetype: string },
+    ownerIdOrPrefix?: string,
+  ): Promise<string> {
     try {
+      const keyPrefix =
+        ownerIdOrPrefix?.includes('/') === true ? ownerIdOrPrefix : 'files';
+      const ownerId =
+        ownerIdOrPrefix && !ownerIdOrPrefix.includes('/')
+          ? ownerIdOrPrefix
+          : undefined;
       const fileExtension = extname(file.originalname);
-      const fileName = `${randomUUID()}${fileExtension}`;
-      const filePath = join(this.uploadDir, fileName);
+      const key = `${keyPrefix}/${randomUUID()}${fileExtension}`;
 
-      writeFileSync(filePath, file.buffer);
+      const stored = await this.storageAccess.getProvider().save(file.buffer, {
+        key,
+        contentType: file.mimetype,
+        ownerId,
+        visibility: 'private',
+      });
 
-      // Return the filename/path that will be stored in the DB
-      // In a real app, this might be a full URL or a relative path
-      return `/uploads/${fileName}`;
-    } catch (error) {
+      if (ownerId) {
+        this.storageAccess.registerAccessRule({
+          key,
+          ownerId,
+          visibility: 'private',
+        });
+      }
+
+      return stored.path;
+    } catch {
       throw new InternalServerErrorException('Failed to save file');
     }
+  }
+
+  async saveBuffer(
+    buffer: Buffer,
+    pathTemplate: string,
+    contentType = 'image/webp',
+  ): Promise<string> {
+    try {
+      const ext = extname(pathTemplate);
+      const keyPrefix = pathTemplate.includes('/')
+        ? pathTemplate.split('/').slice(0, -1).join('/')
+        : 'files';
+      const key = `${keyPrefix}/${randomUUID()}${ext}`;
+
+      const stored = await this.storageAccess.getProvider().save(buffer, {
+        key,
+        contentType,
+        visibility: 'private',
+      });
+
+      return stored.path;
+    } catch {
+      throw new InternalServerErrorException('Failed to save file');
+    }
+  }
+
+  async getSignedDownloadUrl(
+    key: string,
+    requesterId: string,
+    isAdmin = false,
+  ): Promise<string> {
+    return this.storageAccess.getSignedDownloadUrl(key, requesterId, isAdmin);
+  }
+
+  async getSignedUploadUrl(
+    originalName: string,
+    ownerId: string,
+    contentType: string,
+  ) {
+    return this.storageAccess.getSignedUploadUrl(
+      originalName,
+      ownerId,
+      contentType,
+    );
+  }
+
+  async deleteFile(keyOrPath: string): Promise<void> {
+    await this.storageAccess.getProvider().delete(this.toStorageKey(keyOrPath));
   }
 }

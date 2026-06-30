@@ -31,6 +31,10 @@ export enum NotificationType {
   GOVERNANCE_PROPOSAL_QUEUED = 'GOVERNANCE_PROPOSAL_QUEUED',
   GOVERNANCE_PROPOSAL_EXECUTED = 'GOVERNANCE_PROPOSAL_EXECUTED',
   GOVERNANCE_DELEGATE_VOTED = 'GOVERNANCE_DELEGATE_VOTED',
+  BADGE_EARNED = 'BADGE_EARNED',
+  DISPUTE_CREATED = 'DISPUTE_CREATED',
+  DISPUTE_STATUS_UPDATED = 'DISPUTE_STATUS_UPDATED',
+  DISPUTE_RESOLVED = 'DISPUTE_RESOLVED',
 }
 
 @Entity('notifications')
@@ -42,6 +46,9 @@ export class Notification {
 
   @Column('uuid')
   userId: string;
+
+  @Column('uuid', { nullable: true })
+  tenantId: string | null;
 
   @Column({ type: 'enum', enum: NotificationType })
   type: NotificationType;

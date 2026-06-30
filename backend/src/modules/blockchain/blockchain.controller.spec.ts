@@ -2,6 +2,8 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { BlockchainController } from './blockchain.controller';
 import { StellarService } from './stellar.service';
 import { BalanceSyncService } from './balance-sync.service';
+import { IndexerService } from './indexer.service';
+import { EventStreamBackpressureService } from './event-stream-backpressure.service';
 import { TransactionDto } from './dto/transaction.dto';
 
 const MOCK_PUBLIC_KEY =
@@ -39,11 +41,20 @@ describe('BlockchainController', () => {
       // Add any methods if needed, but since the controller doesn't use it in tests, empty is fine
     };
 
+    const mockIndexerService = {};
+
     const module: TestingModule = await Test.createTestingModule({
       controllers: [BlockchainController],
       providers: [
         { provide: StellarService, useValue: mockStellarService },
         { provide: BalanceSyncService, useValue: mockBalanceSyncService },
+        { provide: IndexerService, useValue: mockIndexerService },
+        {
+          provide: EventStreamBackpressureService,
+          useValue: {
+            getStatus: jest.fn().mockResolvedValue({}),
+          },
+        },
       ],
     }).compile();
 

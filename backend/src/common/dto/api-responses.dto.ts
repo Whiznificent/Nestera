@@ -20,34 +20,34 @@ export class ErrorResponseDto {
 
 export class UnauthorizedResponseDto extends ErrorResponseDto {
   @ApiProperty({ example: 401 })
-  statusCode: number;
+  declare statusCode: number;
 
   @ApiProperty({ example: 'Unauthorized' })
-  message: string;
+  declare message: string;
 }
 
 export class ForbiddenResponseDto extends ErrorResponseDto {
   @ApiProperty({ example: 403 })
-  statusCode: number;
+  declare statusCode: number;
 
   @ApiProperty({ example: 'Forbidden resource' })
-  message: string;
+  declare message: string;
 }
 
 export class NotFoundResponseDto extends ErrorResponseDto {
   @ApiProperty({ example: 404 })
-  statusCode: number;
+  declare statusCode: number;
 
   @ApiProperty({ example: 'Resource not found' })
-  message: string;
+  declare message: string;
 }
 
 export class ConflictResponseDto extends ErrorResponseDto {
   @ApiProperty({ example: 409 })
-  statusCode: number;
+  declare statusCode: number;
 
   @ApiProperty({ example: 'Resource already exists' })
-  message: string;
+  declare message: string;
 }
 
 export class TooManyRequestsResponseDto {
@@ -57,24 +57,41 @@ export class TooManyRequestsResponseDto {
   @ApiProperty({ example: 429 })
   statusCode: number;
 
-  @ApiProperty({ example: 'Rate limit exceeded for free tier. Maximum 60 requests per 60 seconds.' })
+  @ApiProperty({
+    example:
+      'Rate limit exceeded for free tier. Maximum 60 requests per 60 seconds.',
+  })
   message: string;
 
   @ApiProperty({
-    description: 'Seconds to wait before retrying (also returned in Retry-After header)',
+    description:
+      'Seconds to wait before retrying (also returned in Retry-After header)',
     example: 60,
   })
   retryAfter: number;
+
+  @ApiProperty({
+    description: 'ISO timestamp indicating when the rate limit resets',
+    example: '2026-06-29T12:35:00.000Z',
+  })
+  resetAt: string;
+
+  @ApiProperty({
+    description: 'HTTP method and route that triggered the limit',
+    example: 'POST /api/v1/auth/login',
+  })
+  endpoint: string;
 }
 
 export class ValidationErrorResponseDto extends ErrorResponseDto {
   @ApiProperty({ example: 422 })
-  statusCode: number;
+  declare statusCode: number;
 
   @ApiProperty({
-    example: 'targetAmount must be a positive number; goalName should not be empty',
+    example:
+      'targetAmount must be a positive number; goalName should not be empty',
   })
-  message: string;
+  declare message: string;
 }
 
 /** Generic paginated wrapper. */
@@ -83,7 +100,7 @@ export class PaginatedMetaDto {
   page: number;
 
   @ApiProperty({ example: 20 })
-  take: number;
+  pageSize: number;
 
   @ApiProperty({ example: 150 })
   itemCount: number;
@@ -96,6 +113,17 @@ export class PaginatedMetaDto {
 
   @ApiProperty({ example: true })
   hasNextPage: boolean;
+
+  @ApiProperty({ example: 'cursor-token-for-next-page', required: false })
+  nextCursor?: string | null;
+}
+
+export class PaginatedResponseDto<T> {
+  @ApiProperty({ isArray: true, description: 'Items on the current page' })
+  items: T[];
+
+  @ApiProperty({ type: () => PaginatedMetaDto })
+  meta: PaginatedMetaDto;
 }
 
 export class SuccessMessageDto {

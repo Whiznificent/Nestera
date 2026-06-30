@@ -8,7 +8,17 @@ import { ApmInterceptor } from './apm.interceptor';
 @Global()
 @Module({
   controllers: [ApmController],
-  providers: [ApmService, MetricsService, DistributedTracingService, ApmInterceptor],
-  exports: [ApmService, MetricsService, DistributedTracingService, ApmInterceptor],
+  providers: [
+    ApmService,
+    MetricsService,
+    DistributedTracingService,
+    ApmInterceptor,
+  ],
+  exports: [
+    ApmService,
+    MetricsService,
+    DistributedTracingService,
+    ApmInterceptor,
+  ],
 })
 export class ApmModule {}

@@ -60,7 +60,12 @@ describe('GovernanceProposalsController', () => {
 
     const result = await controller.createProposal(user, dto);
 
-    expect(service.createProposal).toHaveBeenCalledWith('user-1', dto);
+    expect(service.createProposal).toHaveBeenCalledWith(
+      'user-1',
+      dto,
+      undefined,
+      undefined,
+    );
     expect(result).toEqual({ id: 'proposal-1' });
   });
 

@@ -91,6 +91,15 @@ export class GovernanceProposal {
   @Column({ type: 'varchar', length: 50, nullable: true })
   type: ProposalType | null;
 
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  templateId: string | null;
+
+  @Column({ type: 'varchar', length: 20, nullable: true })
+  templateVersion: string | null;
+
+  @Column({ type: 'jsonb', nullable: true })
+  templateParameters: Record<string, unknown> | null;
+
   @Column({ type: 'jsonb', nullable: true })
   action: ProposalActionPayload | null;
 

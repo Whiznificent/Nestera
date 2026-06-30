@@ -1,14 +1,19 @@
-import { Module } from '@nestjs/common';
+import { Module, MiddlewareConsumer, NestModule } from '@nestjs/common';
 import { BullModule } from '@nestjs/bull';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
 import { ThrottlerModule } from '@nestjs/throttler';
-import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
+import { APP_GUARD, APP_INTERCEPTOR, APP_FILTER } from '@nestjs/core';
 import { CorrelationIdInterceptor } from './common/interceptors/correlation-id.interceptor';
 import { AuditLogInterceptor } from './common/interceptors/audit-log.interceptor';
 import { RequestLoggingInterceptor } from './common/interceptors/request-logging.interceptor';
 import { GracefulShutdownInterceptor } from './common/interceptors/graceful-shutdown.interceptor';
+import { IdempotencyInterceptor } from './common/interceptors/idempotency.interceptor';
+import { MetricsInterceptor } from './common/interceptors/metrics.interceptor';
+import { AdminConfirmationInterceptor } from './common/interceptors/admin-confirmation.interceptor';
+import { AdminConfirmationFilter } from './common/filters/admin-confirmation.filter';
 import { TieredThrottlerGuard } from './common/guards/tiered-throttler.guard';
+import { AdminConfirmationGuard } from './common/guards/admin-confirmation.guard';
 import { CommonModule } from './common/common.module';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { LoggerModule } from 'nestjs-pino';
@@ -17,6 +22,7 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import configuration from './config/configuration';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { buildTypeOrmModuleOptions } from './common/database/typeorm-pool.config';
 import { AuthModule } from './auth/auth.module';
 import { HealthModule } from './modules/health/health.module';
 import { BlockchainModule } from './modules/blockchain/blockchain.module';
@@ -26,6 +32,7 @@ import { ChallengesModule } from './modules/challenges/challenges.module';
 import { AlertsModule } from './modules/alerts/alerts.module';
 import { AdminModule } from './modules/admin/admin.module';
 import { MailModule } from './modules/mail/mail.module';
+import { EmailTemplatesModule } from './modules/email-templates/email-templates.module';
 import { CacheModule } from './modules/cache/cache.module';
 import { WebhooksModule } from './modules/webhooks/webhooks.module';
 import { ClaimsModule } from './modules/claims/claims.module';
@@ -47,8 +54,16 @@ import { ConnectionPoolModule } from './common/database/connection-pool.module';
 import { CircuitBreakerModule } from './common/circuit-breaker/circuit-breaker.module';
 import { PostmanModule } from './common/postman/postman.module';
 import { CorrelationIdMiddleware } from './common/middleware/correlation-id.middleware';
+import { CompressionMetricsMiddleware } from './common/middleware/compression.middleware';
 import { JobsModule } from './modules/jobs/jobs.module';
+import { JobQueueModule } from './modules/job-queue/job-queue.module';
 import { GracefulShutdownService } from './common/services/graceful-shutdown.service';
+import { ApmModule } from './modules/apm/apm.module';
+import { PerformanceModule } from './modules/performance/performance.module';
+import { SandboxModule } from './modules/sandbox/sandbox.module';
+import { FeedbackModule } from './modules/feedback/feedback.module';
+import { StatisticsModule } from './modules/statistics/statistics.module';
+import { FeatureFlagsModule } from './modules/feature-flags/feature-flags.module';
 
 const envValidationSchema = Joi.object({
   NODE_ENV: Joi.string().valid('development', 'production', 'test').required(),
@@ -61,8 +76,39 @@ const envValidationSchema = Joi.object({
   DB_PASS: Joi.string().optional(),
   DATABASE_URL: Joi.string().uri().optional(),
 
+  DATABASE_POOL_MAX: Joi.number().integer().min(1).default(10),
+  DATABASE_POOL_MIN: Joi.number().integer().min(0).default(2),
+  DATABASE_POOL_MAX_CEILING: Joi.number().integer().min(1).default(50),
+  DATABASE_IDLE_TIMEOUT: Joi.number().integer().min(1000).default(30000),
+  DATABASE_CONNECTION_TIMEOUT: Joi.number().integer().min(100).default(2000),
+  DATABASE_STATEMENT_TIMEOUT: Joi.number().integer().min(1000).default(30000),
+  DATABASE_QUERY_TIMEOUT: Joi.number().integer().min(1000).default(30000),
+  DATABASE_POOL_MONITOR_INTERVAL: Joi.number()
+    .integer()
+    .min(5000)
+    .default(30000),
+  DATABASE_POOL_SCALE_UP_THRESHOLD: Joi.number().min(1).max(100).default(80),
+  DATABASE_POOL_SCALE_DOWN_THRESHOLD: Joi.number().min(1).max(100).default(30),
+  DATABASE_POOL_EXHAUSTION_WAITING_THRESHOLD: Joi.number()
+    .integer()
+    .min(0)
+    .default(1),
+  DATABASE_POOL_LEAK_THRESHOLD: Joi.number().min(1).max(100).default(90),
+  DATABASE_POOL_ALLOW_EXIT_ON_IDLE: Joi.boolean().default(false),
+  DATABASE_POOL_AUTO_SCALE: Joi.boolean().default(true),
+
+  DB_MAX_RETRIES: Joi.number().integer().min(0).default(5),
+  DB_RETRY_INITIAL_DELAY: Joi.number().integer().min(0).default(500),
+  DB_RETRY_MAX_DELAY: Joi.number().integer().min(0).default(30000),
+  DB_RETRY_BACKOFF: Joi.number().min(1).default(2.0),
+  DB_RETRY_JITTER: Joi.number().integer().min(0).default(100),
+
   JWT_SECRET: Joi.string().min(10).required(),
   JWT_EXPIRATION: Joi.string().required(),
+
+  MULTI_TENANT_ENABLED: Joi.boolean().default(false),
+  DEFAULT_TENANT_ID: Joi.string().optional(),
+  DEFAULT_TENANT_SLUG: Joi.string().optional(),
 
   STELLAR_NETWORK: Joi.string().valid('testnet', 'mainnet').default('testnet'),
   SOROBAN_RPC_URL: Joi.string().uri().required(),
@@ -95,6 +141,13 @@ const envValidationSchema = Joi.object({
   BACKUP_ENCRYPTION_KEY: Joi.string().length(64).optional(), // 32-byte key as hex
   BACKUP_RETENTION_DAYS: Joi.number().integer().min(1).default(30).optional(),
   BACKUP_TMP_DIR: Joi.string().optional(),
+
+  LOG_DIR: Joi.string().optional(),
+  LOG_RETENTION_DAYS: Joi.number().integer().min(1).default(30).optional(),
+
+  COMPRESSION_THRESHOLD: Joi.number().integer().min(0).default(1024),
+  JSON_BODY_LIMIT: Joi.string().default('1mb'),
+  URLENCODED_BODY_LIMIT: Joi.string().default('1mb'),
 });
 
 @Module({
@@ -105,25 +158,95 @@ const envValidationSchema = Joi.object({
       useFactory: (configService: ConfigService) => {
         const isProduction =
           configService.get<string>('NODE_ENV') === 'production';
+        const logLevel = isProduction ? 'info' : 'debug';
+
         return {
           pinoHttp: {
+            level: logLevel,
+            // Attach correlationId from request to every log line
+            customProps: (req: import('http').IncomingMessage) => ({
+              correlationId:
+                (
+                  req as import('http').IncomingMessage & {
+                    correlationId?: string;
+                  }
+                ).correlationId ||
+                req.headers['x-correlation-id'] ||
+                'unknown',
+            }),
+            // Redact sensitive fields from pino-http auto-logging
+            redact: {
+              paths: [
+                'req.headers.authorization',
+                'req.headers.cookie',
+                'req.headers["x-api-key"]',
+                'req.body.password',
+                'req.body.secret',
+                'req.body.token',
+                'req.body.privateKey',
+                'req.body.secretKey',
+                'req.body.mnemonic',
+                'res.headers["set-cookie"]',
+              ],
+              censor: '[REDACTED]',
+            },
+            // Serializers for structured output
+            serializers: {
+              req: (req) => ({
+                id: req.id,
+                method: req.method,
+                url: req.url,
+                remoteAddress: req.remoteAddress,
+                userAgent: req.headers?.['user-agent'],
+              }),
+              res: (res) => ({
+                statusCode: res.statusCode,
+              }),
+              err: (err) => ({
+                type: err.type,
+                message: err.message,
+                stack: isProduction ? undefined : err.stack,
+              }),
+            },
             transport: isProduction
-              ? undefined
-              : { target: 'pino-pretty', options: { singleLine: true } },
-            level: isProduction ? 'info' : 'debug',
+              ? (() => {
+                  const logDir = configService.get<string>('LOG_DIR');
+                  const retentionDays =
+                    configService.get<number>('LOG_RETENTION_DAYS') ?? 30;
+                  // File transport for log retention when LOG_DIR is set
+                  if (logDir) {
+                    return {
+                      targets: [
+                        {
+                          target: 'pino/file',
+                          options: {
+                            destination: `${logDir}/app.log`,
+                            mkdir: true,
+                          },
+                          level: logLevel,
+                        },
+                      ],
+                    };
+                  }
+                  // No transport in production without LOG_DIR (stdout JSON)
+                  void retentionDays;
+                  return undefined;
+                })()
+              : {
+                  target: 'pino-pretty',
+                  options: {
+                    singleLine: true,
+                    colorize: true,
+                    translateTime: 'yyyy-mm-dd HH:MM:ss',
+                    ignore: 'pid,hostname',
+                    messageFormat: '[{correlationId}] {msg}',
+                  },
+                },
           },
         };
       },
     }),
-    BullModule.forRootAsync({
-      imports: [ConfigModule],
-      inject: [ConfigService],
-      useFactory: (config: ConfigService) => ({
-        redis: {
-          uri: config.get<string>('REDIS_URL') || 'redis://localhost:6379',
-        },
-      }),
-    }),
+    ConfigModule.forRoot({
       isGlobal: true,
       load: [configuration],
       validationSchema: envValidationSchema,
@@ -150,44 +273,36 @@ const envValidationSchema = Joi.object({
         return value;
       },
     }),
+    LoggerModule.forRootAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (configService: ConfigService) => {
+        const isProduction =
+          configService.get<string>('NODE_ENV') === 'production';
+        return {
+          pinoHttp: {
+            transport: isProduction
+              ? undefined
+              : { target: 'pino-pretty', options: { singleLine: true } },
+            level: isProduction ? 'info' : 'debug',
+          },
+        };
+      },
+    }),
+    BullModule.forRootAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => ({
+        url: config.get<string>('redis.url') || 'redis://localhost:6379',
+      }),
+    }),
     EventEmitterModule.forRoot(),
     ScheduleModule.forRoot(),
     TypeOrmModule.forRootAsync({
       inject: [ConfigService],
-      useFactory: (configService: ConfigService) => {
-        const dbUrl = configService.get<string>('database.url');
-        const dbHost = configService.get<string>('database.host');
-
-        if (dbUrl) {
-          // URL-based connection (e.g. DATABASE_URL on cloud platforms)
-          return {
-            type: 'postgres' as const,
-            url: dbUrl,
-            autoLoadEntities: true,
-            synchronize: configService.get<string>('NODE_ENV') !== 'production',
-          };
-        }
-
-        // Host-based connection (uses DB_HOST, DB_PORT, DB_NAME, DB_USER, DB_PASS)
-        if (!dbHost) {
-          throw new Error(
-            'Database configuration error: set either DATABASE_URL or DB_HOST in your environment.',
-          );
-        }
-
-        return {
-          type: 'postgres' as const,
-          host: dbHost,
-          port: configService.get<number>('database.port') ?? 5432,
-          database: configService.get<string>('database.name'),
-          username: configService.get<string>('database.user'),
-          password: configService.get<string>('database.pass'),
-          autoLoadEntities: true,
-          synchronize: configService.get<string>('NODE_ENV') !== 'production',
-        };
-      },
+      useFactory: (configService: ConfigService) =>
+        buildTypeOrmModuleOptions(configService),
     }),
-    ScheduleModule.forRoot(),
     AuthModule,
     CacheModule,
     HealthModule,
@@ -198,11 +313,13 @@ const envValidationSchema = Joi.object({
     AlertsModule,
     AdminModule,
     MailModule,
+    EmailTemplatesModule,
     WebhooksModule,
     ClaimsModule,
     DisputesModule,
     AdminAnalyticsModule,
     AnalyticsModule,
+    StatisticsModule,
     SavingsModule,
     GovernanceModule,
     NotificationsModule,
@@ -218,6 +335,12 @@ const envValidationSchema = Joi.object({
     CircuitBreakerModule,
     PostmanModule,
     PerformanceModule,
+    ApmModule,
+    FeatureFlagsModule,
+    JobsModule,
+    JobQueueModule,
+    SandboxModule,
+    FeedbackModule,
     CommonModule,
     ThrottlerModule.forRoot([
       {
@@ -231,9 +354,43 @@ const envValidationSchema = Joi.object({
         limit: 5,
       },
       {
+        // OTP / 2FA verification attempts — deliberately strict to resist
+        // brute-force attacks on one-time codes.
+        name: 'otp',
+        ttl: 15 * 60 * 1000, // 15 minutes
+        limit: 3,
+      },
+      {
+        // Wallet-linking is an infrequent, sensitive operation.
+        // 5 attempts per hour per user prevents automated wallet-spam.
+        name: 'wallet-link',
+        ttl: 60 * 60 * 1000, // 1 hour
+        limit: 5,
+      },
+      {
         name: 'rpc',
         ttl: 60000, // 1 minute
         limit: 10,
+      },
+      {
+        name: 'export',
+        ttl: 15 * 60 * 1000, // 15 minutes
+        limit: 6,
+      },
+      {
+        // Governance vote endpoint — intentionally tight because one wallet
+        // should cast at most one vote per proposal.  Legitimate burst usage
+        // (voting on several proposals in quick succession) fits within 10/min.
+        name: 'vote',
+        ttl: 60_000, // 1 minute
+        limit: 10,
+      },
+      {
+        // Admin high-risk endpoints require confirmation and tight throttling.
+        // Intentionally restrictive: 2 requests per 5 minutes per admin.
+        name: 'admin-high-risk',
+        ttl: 5 * 60 * 1000, // 5 minutes
+        limit: 2,
       },
     ]),
   ],
@@ -244,6 +401,14 @@ const envValidationSchema = Joi.object({
     {
       provide: APP_GUARD,
       useClass: TieredThrottlerGuard,
+    },
+    {
+      provide: APP_GUARD,
+      useClass: AdminConfirmationGuard,
+    },
+    {
+      provide: APP_FILTER,
+      useClass: AdminConfirmationFilter,
     },
     {
       provide: APP_INTERCEPTOR,
@@ -259,12 +424,26 @@ const envValidationSchema = Joi.object({
     },
     {
       provide: APP_INTERCEPTOR,
+      useClass: AdminConfirmationInterceptor,
+    },
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: MetricsInterceptor,
+    },
+    {
+      provide: APP_INTERCEPTOR,
       useClass: GracefulShutdownInterceptor,
+    },
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: IdempotencyInterceptor,
     },
   ],
 })
-export class AppModule {
+export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
-    consumer.apply(CorrelationIdMiddleware).forRoutes('*');
+    consumer
+      .apply(CorrelationIdMiddleware, CompressionMetricsMiddleware, TenantContextMiddleware)
+      .forRoutes('*');
   }
 }

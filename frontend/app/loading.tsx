@@ -1,4 +1,4 @@
-import { DashboardCardSkeleton, Spinner } from "./components/ui/LoadingState";
+import { DashboardCardSkeleton, Spinner } from './components/ui/LoadingState';
 
 export default function AppLoading() {
   return (
@@ -11,4 +11,3 @@ export default function AppLoading() {
     </div>
   );
 }
-

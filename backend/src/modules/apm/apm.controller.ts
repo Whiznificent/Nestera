@@ -30,7 +30,10 @@ export class ApmController {
   @Get('metrics')
   @Header('Content-Type', 'text/plain; version=0.0.4; charset=utf-8')
   @ApiOperation({ summary: 'Prometheus-compatible metrics endpoint' })
-  @ApiResponse({ status: 200, description: 'Metrics in Prometheus text format' })
+  @ApiResponse({
+    status: 200,
+    description: 'Metrics in Prometheus text format',
+  })
   getPrometheusMetrics(): string {
     return this.metricsService.getMetricsAsPrometheusText();
   }
@@ -39,7 +42,10 @@ export class ApmController {
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('access-token')
   @ApiOperation({ summary: 'APM dashboard overview' })
-  @ApiResponse({ status: 200, description: 'Dashboard data with metrics, errors, and traces' })
+  @ApiResponse({
+    status: 200,
+    description: 'Dashboard data with metrics, errors, and traces',
+  })
   getDashboard() {
     return this.apmService.getDashboardData();
   }
@@ -48,7 +54,12 @@ export class ApmController {
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('access-token')
   @ApiOperation({ summary: 'Error tracking summary' })
-  @ApiQuery({ name: 'limit', required: false, type: Number, description: 'Number of errors to return' })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    type: Number,
+    description: 'Number of errors to return',
+  })
   getErrors(@Query('limit') limit = 50) {
     return {
       errors: this.apmService.getErrorSummary().slice(0, Number(limit)),

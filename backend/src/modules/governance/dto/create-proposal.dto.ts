@@ -65,21 +65,54 @@ export class CreateProposalDto {
   @MaxLength(5000)
   description: string;
 
-  @ApiProperty({
-    enum: ProposalType,
+  @ApiPropertyOptional({
     description:
-      'Structured proposal type used for validation and categorization',
+      'Structured proposal type used for validation and categorization. Omit when using a template.',
+    enum: ProposalType,
     example: ProposalType.RATE_CHANGE,
   })
+  @IsOptional()
   @IsEnum(ProposalType)
-  type: ProposalType;
+  type?: ProposalType;
 
-  @ApiProperty({
+  @ApiPropertyOptional({
+    description:
+      'Governance proposal template identifier to use for default action generation and validation.',
+    example: 'rate-change-standard',
+  })
+  @IsOptional()
+  @IsString()
+  templateId?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Optional template version. Defaults to the latest available version.',
+    example: '1.0',
+  })
+  @IsOptional()
+  @IsString()
+  templateVersion?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Template parameter overrides used to build the action payload. Required when using a template.',
+    example: { recipient: 'GRECIPIENT123', amount: 5000 },
+    type: 'object',
+    additionalProperties: true,
+  })
+  @IsOptional()
+  @IsObject()
+  templateParameters?: Record<string, unknown>;
+
+  @ApiPropertyOptional({
     description: 'Structured action payload for the proposal',
     example: { target: 'flexiRate', newValue: 10 },
+    type: 'object',
+    additionalProperties: true,
   })
+  @IsOptional()
   @IsObject()
-  action: Record<string, unknown>;
+  action?: Record<string, unknown>;
 
   @ApiPropertyOptional({
     description:

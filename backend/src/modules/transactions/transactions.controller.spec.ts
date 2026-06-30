@@ -1,8 +1,19 @@
+jest.mock('./receipt.service', () => ({
+  ReceiptService: jest.fn().mockImplementation(() => ({
+    generateReceipt: jest.fn(),
+    getReceiptMetadata: jest.fn(),
+  })),
+}));
+
 import { Test, TestingModule } from '@nestjs/testing';
 import { TransactionsController } from './transactions.controller';
 import { TransactionsService } from './transactions.service';
+import { ReceiptService } from './receipt.service';
 import { TransactionQueryDto } from './dto/transaction-query.dto';
-import { LedgerTransactionType } from '../blockchain/entities/transaction.entity';
+import {
+  LedgerTransactionStatus,
+  LedgerTransactionType,
+} from '../blockchain/entities/transaction.entity';
 import { PageDto } from '../../common/dto/page.dto';
 import { TransactionResponseDto } from './dto/transaction-response.dto';
 import { PageMetaDto } from '../../common/dto/page-meta.dto';
@@ -14,9 +25,15 @@ describe('TransactionsController', () => {
 
   const mockTransactionsService = {
     findAllForUser: jest.fn(),
+    exportTransactions: jest.fn(),
     tagTransaction: jest.fn(),
     listCategories: jest.fn(),
     bulkTag: jest.fn(),
+    listSavedSearches: jest.fn(),
+    createSavedSearch: jest.fn(),
+    updateSavedSearch: jest.fn(),
+    deleteSavedSearch: jest.fn(),
+    runSavedSearch: jest.fn(),
   };
 
   beforeEach(async () => {
@@ -26,6 +43,13 @@ describe('TransactionsController', () => {
         {
           provide: TransactionsService,
           useValue: mockTransactionsService,
+        },
+        {
+          provide: ReceiptService,
+          useValue: {
+            generateReceipt: jest.fn(),
+            getReceiptMetadata: jest.fn(),
+          },
         },
       ],
     }).compile();
@@ -46,6 +70,7 @@ describe('TransactionsController', () => {
       id: '1',
       userId: mockUser.id,
       type: LedgerTransactionType.DEPOSIT,
+      status: LedgerTransactionStatus.COMPLETED,
       amount: '100.50',
       amountFormatted: {
         raw: '100.50',
@@ -91,7 +116,7 @@ describe('TransactionsController', () => {
         queryDto,
       );
       expect(result).toEqual(mockPageDto);
-      expect(result.data).toHaveLength(1);
+      expect(result.items).toHaveLength(1);
       expect(result.meta.totalItemCount).toBe(1);
     });
 
@@ -103,6 +128,7 @@ describe('TransactionsController', () => {
         startDate: '2024-01-01T00:00:00.000Z',
         endDate: '2024-12-31T23:59:59.999Z',
         poolId: 'pool-123',
+        status: [LedgerTransactionStatus.COMPLETED],
       });
 
       const mockPageDto = new PageDto(
@@ -165,6 +191,50 @@ describe('TransactionsController', () => {
 
       expect(service.bulkTag).toHaveBeenCalledWith(mockUser.id, body);
       expect(res).toEqual({ ok: true, count: 2 });
+    });
+
+    it('should create a saved search', async () => {
+      const payload = {
+        name: 'Large deposits',
+        query: {
+          type: [LedgerTransactionType.DEPOSIT],
+          minAmount: '1000',
+          order: Order.DESC,
+        },
+      };
+      mockTransactionsService.createSavedSearch.mockResolvedValue({
+        id: 'saved-1',
+        userId: mockUser.id,
+        ...payload,
+        description: null,
+        isDefault: false,
+        createdAt: '2024-01-01T00:00:00.000Z',
+        updatedAt: '2024-01-01T00:00:00.000Z',
+      });
+
+      const res = await controller.createSavedSearch(mockUser, payload);
+
+      expect(service.createSavedSearch).toHaveBeenCalledWith(
+        mockUser.id,
+        payload,
+      );
+      expect(res.id).toBe('saved-1');
+    });
+
+    it('should run a saved search with pagination overrides', async () => {
+      const queryDto = Object.assign(new TransactionQueryDto(), {
+        page: 2,
+        limit: 20,
+      });
+      mockTransactionsService.runSavedSearch.mockResolvedValue({ data: [] });
+
+      await controller.runSavedSearch(mockUser, 'saved-1', queryDto);
+
+      expect(service.runSavedSearch).toHaveBeenCalledWith(
+        mockUser.id,
+        'saved-1',
+        { page: 2, limit: 20 },
+      );
     });
   });
 });

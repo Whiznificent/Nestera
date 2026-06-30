@@ -1,7 +1,7 @@
-"use client";
+'use client';
 
-import React from "react";
-import { Search, Bell, HelpCircle } from "lucide-react";
+import React from 'react';
+import { Search, Bell, HelpCircle } from 'lucide-react';
 
 const TopNav: React.FC = () => {
   return (
@@ -11,10 +11,7 @@ const TopNav: React.FC = () => {
     >
       {/* Left: heading + subtitle */}
       <div className="hidden sm:flex flex-col gap-0.5">
-        <h2
-          className="m-0 text-white font-bold leading-none"
-          style={{ fontSize: 22 }}
-        >
+        <h2 className="m-0 text-white font-bold leading-none" style={{ fontSize: 22 }}>
           Welcome back, Alex
         </h2>
         <p className="m-0 text-[#4e8a96]" style={{ fontSize: 13 }}>
@@ -25,9 +22,9 @@ const TopNav: React.FC = () => {
       {/* Right: icons + avatar */}
       <div className="flex items-center ml-auto" style={{ gap: 10 }}>
         {[
-          { Icon: Search, label: "Search" },
-          { Icon: Bell, label: "Notifications" },
-          { Icon: HelpCircle, label: "Help" },
+          { Icon: Search, label: 'Search' },
+          { Icon: Bell, label: 'Notifications' },
+          { Icon: HelpCircle, label: 'Help' },
         ].map(({ Icon, label }) => (
           <button
             key={label}

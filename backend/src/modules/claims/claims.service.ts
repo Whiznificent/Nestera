@@ -5,6 +5,8 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import { MedicalClaim, ClaimStatus } from './entities/medical-claim.entity';
 import { CreateClaimDto } from './dto/create-claim.dto';
 import { HospitalIntegrationService } from '../hospital-integration/hospital-integration.service';
+import { ResourceNotFoundException } from '../../common/exceptions/domain.exception';
+import { EventualConsistencyService } from '../../common/services/eventual-consistency.service';
 
 @Injectable()
 export class ClaimsService {
@@ -15,6 +17,7 @@ export class ClaimsService {
     private readonly claimsRepository: Repository<MedicalClaim>,
     private readonly hospitalIntegrationService: HospitalIntegrationService,
     private readonly eventEmitter: EventEmitter2,
+    private readonly eventualConsistencyService: EventualConsistencyService,
   ) {}
 
   async createClaim(createClaimDto: CreateClaimDto): Promise<MedicalClaim> {
@@ -44,7 +47,7 @@ export class ClaimsService {
     const claim = await this.findOne(claimId);
 
     if (!claim) {
-      throw new Error('Claim not found');
+      throw new ResourceNotFoundException('Claim', claimId);
     }
 
     this.logger.log(

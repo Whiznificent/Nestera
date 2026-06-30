@@ -4,13 +4,14 @@ import {
   NotFoundException,
   BadRequestException,
   ConflictException,
+  InternalServerErrorException,
 } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bull';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, LessThan } from 'typeorm';
 import { Queue } from 'bullmq';
-import { randomBytes } from 'crypto';
+import { randomBytes, createHash } from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
@@ -39,6 +40,7 @@ import {
 
 const EXPORT_DIR = path.join(os.tmpdir(), 'nestera-exports');
 const MAX_ACTIVE_EXPORTS_PER_USER = 2;
+export const LINK_EXPIRY_DAYS = 7;
 
 @Injectable()
 export class DataExportService {
@@ -62,6 +64,11 @@ export class DataExportService {
     fs.mkdirSync(EXPORT_DIR, { recursive: true });
   }
 
+  // ── Public API ─────────────────────────────────────────────────────────────
+
+  /**
+   * Create an export request and trigger async processing.
+   */
   async requestExport(
     userId: string,
   ): Promise<{ requestId: string; message: string }> {
@@ -121,38 +128,56 @@ export class DataExportService {
     };
   }
 
+  /**
+   * Download a ready export by token.
+   *
+   * Enforces:
+   *  - TTL: rejects if `expiresAt` is in the past.
+   *  - Checksum: rejects if the file on disk no longer matches the stored SHA-256.
+   */
   async getExportFile(
     token: string,
     userId: string,
   ): Promise<{ filePath: string; userId: string }> {
     const request = await this.exportRepository.findOne({ where: { token } });
 
-    if (!request || request.status !== ExportStatus.READY) {
+    if (!request || request.status === ExportStatus.PENDING || request.status === ExportStatus.PROCESSING) {
       throw new NotFoundException('Export not found or not ready');
     }
 
-    // Ownership enforcement
-    if (request.userId !== userId) {
-      throw new NotFoundException('Export not found or not ready');
-    }
-
+    // TTL check — mark as expired if needed
     if (request.expiresAt && request.expiresAt < new Date()) {
-      await this.markExpiredAndCleanup(request.id, 'Export link expired');
+      if (request.status !== ExportStatus.EXPIRED) {
+        await this.exportRepository.update(request.id, {
+          status: ExportStatus.EXPIRED,
+        });
+      }
       throw new BadRequestException('Export link has expired');
+    }
+
+    if (request.status !== ExportStatus.READY) {
+      throw new NotFoundException('Export not found or not ready');
     }
 
     if (!request.filePath || !fs.existsSync(request.filePath)) {
       throw new NotFoundException('Export file not found');
     }
 
-    // Path validation: ensure resolved path remains inside EXPORT_DIR.
-    const resolved = path.resolve(request.filePath);
-    const exportDirResolved = path.resolve(EXPORT_DIR);
-    if (!resolved.startsWith(exportDirResolved + path.sep)) {
-      throw new BadRequestException('Export file path is invalid');
+    // Integrity check — verify SHA-256 checksum
+    if (request.checksum) {
+      const onDiskChecksum = computeFileChecksum(request.filePath);
+      if (onDiskChecksum !== request.checksum) {
+        this.logger.error(
+          `Checksum mismatch for export ${request.id}: ` +
+            `stored=${request.checksum} onDisk=${onDiskChecksum}`,
+        );
+        throw new InternalServerErrorException(
+          'Export artifact integrity check failed',
+        );
+      }
     }
 
-    return { filePath: resolved, userId: request.userId };
+    return { filePath: request.filePath, userId: request.userId };
   }
 
   async getExportStatus(requestId: string, userId: string) {
@@ -172,10 +197,49 @@ export class DataExportService {
       createdAt: refreshed.createdAt,
       completedAt: refreshed.completedAt,
       expiresAt: refreshed.expiresAt,
+      checksum: refreshed.checksum ?? undefined,
+      fileSize: refreshed.fileSize ? Number(refreshed.fileSize) : undefined,
       errorMessage: refreshed.errorMessage,
       downloadUrl,
     };
   }
+
+  // ── Scheduled cleanup ──────────────────────────────────────────────────────
+
+  /**
+   * Purge expired export records and their files.
+   * Runs daily at 04:00 UTC to avoid conflict with backup crons (02:00 / 03:00).
+   */
+  @Cron('0 4 * * *')
+  async purgeExpiredExports(): Promise<void> {
+    const now = new Date();
+    const expired = await this.exportRepository.find({
+      where: { expiresAt: LessThan(now), status: ExportStatus.READY },
+    });
+
+    for (const record of expired) {
+      try {
+        if (record.filePath && fs.existsSync(record.filePath)) {
+          fs.unlinkSync(record.filePath);
+          this.logger.log(`Deleted expired export file: ${record.filePath}`);
+        }
+        await this.exportRepository.update(record.id, {
+          status: ExportStatus.EXPIRED,
+          filePath: null,
+        });
+      } catch (err) {
+        this.logger.error(
+          `Failed to purge export ${record.id}: ${(err as Error).message}`,
+        );
+      }
+    }
+
+    if (expired.length > 0) {
+      this.logger.log(`Purged ${expired.length} expired export(s)`);
+    }
+  }
+
+  // ── Private helpers ────────────────────────────────────────────────────────
 
   async getExportHistory(userId: string) {
     const requests = await this.exportRepository.find({
@@ -316,8 +380,12 @@ export class DataExportService {
         return;
       }
 
+      // Compute SHA-256 checksum of the final artifact
+      const checksum = computeFileChecksum(zipPath);
+      const fileSize = fs.statSync(zipPath).size;
+
       const token = randomBytes(32).toString('hex');
-      const expiresAt = new Date(Date.now() + DATA_EXPORT_LINK_TTL_MS);
+      const expiresAt = new Date(Date.now() + LINK_EXPIRY_DAYS * 86_400_000);
       await this.exportRepository.update(request.id, {
         status: ExportStatus.READY,
         token,
@@ -325,6 +393,8 @@ export class DataExportService {
         expiresAt,
         completedAt: new Date(),
         errorMessage: null,
+        checksum,
+        fileSize,
       });
 
       const downloadUrl = `/users/data/export/download/${token}`;
@@ -334,7 +404,10 @@ export class DataExportService {
         `Hi ${user.name || 'there'},\n\nYour data export is ready. Download it here:\n${downloadUrl}\n\nThis link expires in 7 days.\n\nNestera Team`,
       );
 
-      this.logger.log(`Export ${request.id} completed for user ${user.id}`);
+      this.logger.log(
+        `Export ${request.id} completed for user ${user.id} ` +
+          `(checksum=${checksum}, size=${fileSize}B)`,
+      );
     } catch (err) {
       const latest = await this.exportRepository.findOne({
         where: { id: request.id },
@@ -553,4 +626,15 @@ export class DataExportService {
       // Ignore missing files during cleanup.
     }
   }
+}
+
+// ── Standalone utility ─────────────────────────────────────────────────────
+
+/**
+ * Compute the SHA-256 hex digest of the file at `filePath`.
+ * Synchronous — suitable for small-to-medium export files.
+ */
+export function computeFileChecksum(filePath: string): string {
+  const buffer = fs.readFileSync(filePath);
+  return createHash('sha256').update(buffer).digest('hex');
 }

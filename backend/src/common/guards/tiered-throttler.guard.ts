@@ -39,6 +39,7 @@ const TIER_LIMITS: Record<
     rpc: { limit: 5, ttl: 60000 },
     export: { limit: 1, ttl: 15 * 60 * 1000 },
     vote: { limit: 5, ttl: 60_000 },
+    upload: { limit: 10, ttl: 60_000 },
     'admin-high-risk': { limit: 0, ttl: 5 * 60 * 1000 }, // Not allowed
   },
   [UserTier.VERIFIED]: {
@@ -49,6 +50,7 @@ const TIER_LIMITS: Record<
     rpc: { limit: 15, ttl: 60000 },
     export: { limit: 3, ttl: 15 * 60 * 1000 },
     vote: { limit: 10, ttl: 60_000 },
+    upload: { limit: 30, ttl: 60_000 },
     'admin-high-risk': { limit: 0, ttl: 5 * 60 * 1000 }, // Not allowed
   },
   [UserTier.PREMIUM]: {
@@ -59,6 +61,7 @@ const TIER_LIMITS: Record<
     rpc: { limit: 30, ttl: 60000 },
     export: { limit: 4, ttl: 15 * 60 * 1000 },
     vote: { limit: 20, ttl: 60_000 },
+    upload: { limit: 60, ttl: 60_000 },
     'admin-high-risk': { limit: 0, ttl: 5 * 60 * 1000 }, // Not allowed
   },
   [UserTier.ENTERPRISE]: {
@@ -69,6 +72,7 @@ const TIER_LIMITS: Record<
     rpc: { limit: 100, ttl: 60000 },
     export: { limit: 8, ttl: 15 * 60 * 1000 },
     vote: { limit: 30, ttl: 60_000 },
+    upload: { limit: 120, ttl: 60_000 },
     'admin-high-risk': { limit: 0, ttl: 5 * 60 * 1000 }, // Not allowed
   },
   [UserTier.ADMIN]: {
@@ -79,6 +83,7 @@ const TIER_LIMITS: Record<
     rpc: { limit: 100, ttl: 60000 },
     export: { limit: 6, ttl: 15 * 60 * 1000 },
     vote: { limit: 30, ttl: 60_000 },
+    upload: { limit: 240, ttl: 60_000 },
     'admin-high-risk': { limit: 2, ttl: 5 * 60 * 1000 }, // 2 per 5 minutes
   },
 };
@@ -201,10 +206,7 @@ export class TieredThrottlerGuard extends ThrottlerGuard {
 
         response.setHeader('Retry-After', retryAfter);
         response.setHeader('X-RateLimit-Remaining', 0);
-        response.setHeader(
-          'X-RateLimit-Reset',
-          resetAt,
-        );
+        response.setHeader('X-RateLimit-Reset', resetAt);
 
         throw new HttpException(
           {

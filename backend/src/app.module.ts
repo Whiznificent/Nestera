@@ -12,6 +12,7 @@ import { IdempotencyInterceptor } from './common/interceptors/idempotency.interc
 import { MetricsInterceptor } from './common/interceptors/metrics.interceptor';
 import { AdminConfirmationInterceptor } from './common/interceptors/admin-confirmation.interceptor';
 import { AdminConfirmationFilter } from './common/filters/admin-confirmation.filter';
+import { StorageQuotaExceptionFilter } from './common/filters/storage-quota-exception.filter';
 import { TieredThrottlerGuard } from './common/guards/tiered-throttler.guard';
 import { AdminConfirmationGuard } from './common/guards/admin-confirmation.guard';
 import { CommonModule } from './common/common.module';
@@ -64,6 +65,7 @@ import { SandboxModule } from './modules/sandbox/sandbox.module';
 import { FeedbackModule } from './modules/feedback/feedback.module';
 import { StatisticsModule } from './modules/statistics/statistics.module';
 import { FeatureFlagsModule } from './modules/feature-flags/feature-flags.module';
+import { StorageQuotaModule } from './modules/storage-quota/storage-quota.module';
 
 const envValidationSchema = Joi.object({
   NODE_ENV: Joi.string().valid('development', 'production', 'test').required(),
@@ -342,6 +344,7 @@ const envValidationSchema = Joi.object({
     SandboxModule,
     FeedbackModule,
     CommonModule,
+    StorageQuotaModule,
     ThrottlerModule.forRoot([
       {
         name: 'default',
@@ -386,6 +389,14 @@ const envValidationSchema = Joi.object({
         limit: 10,
       },
       {
+        // Upload endpoints (avatar / KYC documents / dispute evidence /
+        // feedback screenshots). Per-tier cap is enforced by TieredThrottlerGuard;
+        // this top-level limit exists as a safety floor for anonymous traffic.
+        name: 'upload',
+        ttl: 60_000, // 1 minute
+        limit: 5,
+      },
+      {
         // Admin high-risk endpoints require confirmation and tight throttling.
         // Intentionally restrictive: 2 requests per 5 minutes per admin.
         name: 'admin-high-risk',
@@ -409,6 +420,10 @@ const envValidationSchema = Joi.object({
     {
       provide: APP_FILTER,
       useClass: AdminConfirmationFilter,
+    },
+    {
+      provide: APP_FILTER,
+      useClass: StorageQuotaExceptionFilter,
     },
     {
       provide: APP_INTERCEPTOR,
@@ -443,7 +458,11 @@ const envValidationSchema = Joi.object({
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
     consumer
-      .apply(CorrelationIdMiddleware, CompressionMetricsMiddleware, TenantContextMiddleware)
+      .apply(
+        CorrelationIdMiddleware,
+        CompressionMetricsMiddleware,
+        TenantContextMiddleware,
+      )
       .forRoutes('*');
   }
 }

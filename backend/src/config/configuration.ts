@@ -241,6 +241,17 @@ export default () => ({
     localDir: process.env.STORAGE_LOCAL_DIR || './uploads',
     virusScanningEnabled: process.env.UPLOAD_VIRUS_SCANNING === 'true',
   },
+  storageQuota: {
+    enabled: process.env.STORAGE_QUOTA_ENABLED !== 'false',
+    reservationTtlHours: parseInt(
+      process.env.STORAGE_QUOTA_RESERVATION_TTL_HOURS || '4',
+      10,
+    ),
+    cleanupIntervalMinutes: parseInt(
+      process.env.STORAGE_QUOTA_CLEANUP_INTERVAL_MINUTES || '15',
+      10,
+    ),
+  },
   adminNotifications: {
     maxPerMinute: parseInt(process.env.ADMIN_NOTIF_MAX_PER_MINUTE || '60', 10),
     maxPerHour: parseInt(process.env.ADMIN_NOTIF_MAX_PER_HOUR || '500', 10),

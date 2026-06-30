@@ -239,8 +239,12 @@ describe('IdempotencyInterceptor', () => {
     await firstValueFrom(obs);
     await new Promise((r) => setTimeout(r, 20));
 
-    const [[, , ttlArg]] = cache.set.mock.calls;
-    expect(ttlArg).toBe(customTtl * 1000);
+    const [[, storedVal, ttlArg]] = cache.set.mock.calls;
+    // The cache TTL is the configured TTL plus the cleanup grace window,
+    // so that an expired-by-`expiresAt` record remains resident long
+    // enough for the cleanup job to observe, count, and remove it.
+    expect(ttlArg).toBe(customTtl * 1000 + 60_000);
+    expect((storedVal as any).expiresAt).toBeTypeOf('number');
   });
 });
 

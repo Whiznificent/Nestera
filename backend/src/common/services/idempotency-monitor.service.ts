@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
 import { EventEmitter2 } from '@nestjs/event-emitter';
+import type { IdempotencyCleanupEvent } from './idempotency-cleanup.service';
 
 export interface IdempotencyConflictEvent {
   /** The idempotency key submitted by the client (never the payload) */
@@ -34,6 +35,23 @@ export interface IdempotencyUsageRecord {
   replayCount: number;
 }
 
+/**
+ * Trimmed copy of the cleanup-event payload that the monitor keeps
+ * for admin observability.  Mirrors records in
+ * `IdempotencyCleanupService.metrics` but is exposed via the same
+ * admin surface as conflict / usage data.
+ */
+export interface IdempotencyCleanupRunRecord {
+  cleanedCount: number;
+  skippedCount: number;
+  scannedCount: number;
+  durationMs: number;
+  missingExpiresAtCount: number;
+  earliestActiveExpiresAt?: number;
+  finishedAt: string;
+  reason: string;
+}
+
 @Injectable()
 export class IdempotencyMonitorService {
   private readonly logger = new Logger(IdempotencyMonitorService.name);
@@ -45,6 +63,25 @@ export class IdempotencyMonitorService {
   /** Circular buffer for recent key usage – max 5 000 entries */
   private readonly usageMap = new Map<string, IdempotencyUsageRecord>();
   private readonly MAX_USAGE_KEYS = 5_000;
+
+  /**
+   * Circular buffer for cleanup runs – max 50 entries.  Cleanup runs
+   * are much rarer than idempotency requests so a smaller cap is fine.
+   */
+  private readonly cleanupHistory: IdempotencyCleanupRunRecord[] = [];
+  private readonly MAX_CLEANUP_RUNS = 50;
+
+  /** Aggregate counters over the lifetime of the process. */
+  private cleanupAggregate = {
+    totalRuns: 0,
+    successfulRuns: 0,
+    skippedNotLeaderRuns: 0,
+    skippedNoRedisRuns: 0,
+    skippedDisabledRuns: 0,
+    errorRuns: 0,
+    totalCleaned: 0,
+    lastStartAt: null as string | null,
+  };
 
   constructor(private readonly eventEmitter: EventEmitter2) {}
 
@@ -95,6 +132,59 @@ export class IdempotencyMonitorService {
       lastSeenAt: new Date().toISOString(),
       replayCount: 0,
     });
+  }
+
+  /**
+   * Records metrics from the periodic background cleanup job.  Updates
+   * the aggregate counter and pushes a trimmed record onto the
+   * circular buffer for admin observability.
+   */
+  @OnEvent('idempotency.cleanup')
+  handleCleanup(event: IdempotencyCleanupEvent): void {
+    this.cleanupAggregate.totalRuns += 1;
+    this.cleanupAggregate.lastStartAt = event.finishedAt;
+    this.cleanupAggregate.totalCleaned += event.cleanedCount;
+
+    switch (event.reason) {
+      case 'cleaned':
+        this.cleanupAggregate.successfulRuns += 1;
+        break;
+      case 'skipped-not-leader':
+        this.cleanupAggregate.skippedNotLeaderRuns += 1;
+        break;
+      case 'skipped-no-redis':
+        this.cleanupAggregate.skippedNoRedisRuns += 1;
+        break;
+      case 'skipped-disabled':
+        this.cleanupAggregate.skippedDisabledRuns += 1;
+        break;
+      case 'error':
+        // Recorded as a distinct category so observability surfaces
+        // differentiate a Redis flap from "cleanup never ran".
+        this.cleanupAggregate.errorRuns += 1;
+        break;
+      default:
+        // Future reason labels — counted in totalRuns only.
+        break;
+    }
+
+    if (this.cleanupHistory.length >= this.MAX_CLEANUP_RUNS) {
+      this.cleanupHistory.shift();
+    }
+    this.cleanupHistory.push({
+      cleanedCount: event.cleanedCount,
+      skippedCount: event.skippedCount,
+      scannedCount: event.scannedCount,
+      durationMs: event.durationMs,
+      missingExpiresAtCount: event.missingExpiresAtCount,
+      earliestActiveExpiresAt: event.earliestActiveExpiresAt,
+      finishedAt: event.finishedAt,
+      reason: event.reason,
+    });
+
+    this.logger.debug(
+      `Idempotency cleanup run recorded: reason=${event.reason} cleaned=${event.cleanedCount} skipped=${event.skippedCount} durationMs=${event.durationMs}`,
+    );
   }
 
   // ──────────────────────────────────────────────────────────────────────────
@@ -187,6 +277,40 @@ export class IdempotencyMonitorService {
           new Date(b.lastSeenAt).getTime() - new Date(a.lastSeenAt).getTime(),
       )
       .slice(0, limit);
+  }
+
+  /**
+   * Returns recent cleanup runs, newest first.
+   */
+  getCleanupHistory(limit = 20): IdempotencyCleanupRunRecord[] {
+    return [...this.cleanupHistory].reverse().slice(0, limit);
+  }
+
+  /**
+   * Aggregate summary of cleanup runs since process start.
+   */
+  getCleanupSummary(): {
+    totalRuns: number;
+    successfulRuns: number;
+    skippedNotLeaderRuns: number;
+    skippedNoRedisRuns: number;
+    skippedDisabledRuns: number;
+    errorRuns: number;
+    totalCleaned: number;
+    lastStartAt: string | null;
+    recentRuns: IdempotencyCleanupRunRecord[];
+  } {
+    return {
+      totalRuns: this.cleanupAggregate.totalRuns,
+      successfulRuns: this.cleanupAggregate.successfulRuns,
+      skippedNotLeaderRuns: this.cleanupAggregate.skippedNotLeaderRuns,
+      skippedNoRedisRuns: this.cleanupAggregate.skippedNoRedisRuns,
+      skippedDisabledRuns: this.cleanupAggregate.skippedDisabledRuns,
+      errorRuns: this.cleanupAggregate.errorRuns,
+      totalCleaned: this.cleanupAggregate.totalCleaned,
+      lastStartAt: this.cleanupAggregate.lastStartAt,
+      recentRuns: this.getCleanupHistory(10),
+    };
   }
 
   // ──────────────────────────────────────────────────────────────────────────

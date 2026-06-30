@@ -150,6 +150,17 @@ const envValidationSchema = Joi.object({
   COMPRESSION_THRESHOLD: Joi.number().integer().min(0).default(1024),
   JSON_BODY_LIMIT: Joi.string().default('1mb'),
   URLENCODED_BODY_LIMIT: Joi.string().default('1mb'),
+
+  IDEMPOTENCY_CLEANUP_ENABLED: Joi.boolean().default(true),
+  IDEMPOTENCY_CLEANUP_CRON: Joi.string()
+    .regex(/^(\S+\s+){4}\S+$/)
+    .default('0 * * * *'),
+  IDEMPOTENCY_CLEANUP_BATCH_SIZE: Joi.number().integer().min(1).default(500),
+  IDEMPOTENCY_CLEANUP_SCAN_COUNT: Joi.number().integer().min(1).default(200),
+  IDEMPOTENCY_CLEANUP_LOCK_TTL_MS: Joi.number()
+    .integer()
+    .min(1000)
+    .default(120000),
 });
 
 @Module({

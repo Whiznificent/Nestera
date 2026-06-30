@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { BullModule } from '@nestjs/bull';
 import { EventEmitterModule } from '@nestjs/event-emitter';
+import { ScheduleModule } from '@nestjs/schedule';
 import { UserModule } from '../user/user.module';
 import { SavingsModule } from '../savings/savings.module';
 import { MailModule } from '../mail/mail.module';
@@ -14,6 +15,8 @@ import { AdminWaitlistController } from './admin-waitlist.controller';
 import { AdminUsersController } from './admin-users.controller';
 import { AdminWithdrawalController } from './admin-withdrawal.controller';
 import { AdminWithdrawalService } from './admin-withdrawal.service';
+import { AdminWorkflowController } from './admin-workflow.controller';
+import { AdminEmergencyWithdrawalWorkflowController } from './admin-emergency-withdrawal-workflow.controller';
 
 import { CircuitBreakerController } from './circuit-breaker.controller';
 import { AdminDisputesController } from './admin-disputes.controller';
@@ -30,15 +33,12 @@ import { AdminNotificationsService } from './admin-notifications.service';
 import { AdminNotificationRateLimiterService } from './admin-notification-rate-limiter.service';
 import { AdminTransactionsService } from './admin-transactions.service';
 import { AdminConfirmationService } from './admin-confirmation.service';
-import { AdminExportService } from './services/admin-export.service';
-import { AdminExportProcessor } from './processors/admin-export.processor';
-import { AdminLedgerService } from './admin-ledger.service';
-import { ADMIN_EXPORT_QUEUE } from './admin-export.constants';
-import { AdminExportJob } from './entities/admin-export-job.entity';
+import { WorkflowService } from './workflow.service';
+import { WorkflowAuditService } from './workflow-audit.service';
+import { EmergencyWithdrawalWorkflowService } from './emergency-withdrawal-workflow.service';
 import { AdminTransactionNote } from './entities/admin-transaction-note.entity';
 import { AdminConfirmation } from './entities/admin-confirmation.entity';
-import { AdminCorrectionLedger } from './entities/admin-correction-ledger.entity';
-import { DataScopeService } from '../../common/services/data-scope.service';
+import { AdminWorkflow } from './entities/admin-workflow.entity';
 import { User } from '../user/entities/user.entity';
 import { UserSubscription } from '../savings/entities/user-subscription.entity';
 import { SavingsProduct } from '../savings/entities/savings-product.entity';
@@ -62,7 +62,7 @@ import { JobQueueModule } from '../job-queue/job-queue.module';
       Transaction,
       AdminTransactionNote,
       AdminConfirmation,
-      AdminCorrectionLedger,
+      AdminWorkflow,
       Dispute,
       DisputeTimeline,
       Notification,
@@ -77,6 +77,7 @@ import { JobQueueModule } from '../job-queue/job-queue.module';
     NotificationsModule,
     JobQueueModule,
     EventEmitterModule,
+    ScheduleModule.forRoot(),
   ],
   controllers: [
     AdminController,
@@ -84,6 +85,8 @@ import { JobQueueModule } from '../job-queue/job-queue.module';
     AdminWaitlistController,
     AdminUsersController,
     AdminWithdrawalController,
+    AdminWorkflowController,
+    AdminEmergencyWithdrawalWorkflowController,
     AdminNotificationsController,
     AdminTransactionsController,
     AdminDisputesController,
@@ -100,17 +103,15 @@ import { JobQueueModule } from '../job-queue/job-queue.module';
     AdminTransactionsService,
     AdminWithdrawalService,
     AdminConfirmationService,
-    AdminExportService,
-    AdminExportProcessor,
-    AdminLedgerService,
-    DataScopeService,
+    WorkflowService,
+    WorkflowAuditService,
+    EmergencyWithdrawalWorkflowService,
   ],
   exports: [
     AdminDisputesService,
     AdminAuditLogsService,
     AdminConfirmationService,
-    AdminExportService,
-    AdminLedgerService,
+    WorkflowService,
   ],
 })
 export class AdminModule {}

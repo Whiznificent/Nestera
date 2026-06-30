@@ -15,11 +15,21 @@ import {
 import { User } from '../../user/entities/user.entity';
 import { SavingsProduct } from '../../savings/entities/savings-product.entity';
 import { TransactionStateMachineService } from '../../transactions/transaction-state-machine.service';
-import {
-  BlockchainEventParser,
-  RawBlockchainEvent,
-} from '../blockchain-event-parser.service';
-import { QuarantineReason } from '../entities/malformed-blockchain-event.entity';
+import { ContractEventValidatorService } from '../contract-event-validator.service';
+
+interface IndexerEvent {
+  id?: string;
+  topic?: unknown[];
+  value?: unknown;
+  txHash?: string;
+  ledger?: number;
+  [key: string]: unknown;
+}
+
+interface YieldPayload {
+  publicKey: string;
+  amount: string; // This represents the interest earned
+}
 
 @Injectable()
 export class YieldHandler {
@@ -31,7 +41,7 @@ export class YieldHandler {
   constructor(
     @InjectDataSource() private readonly dataSource: DataSource,
     private readonly transactionStateMachine: TransactionStateMachineService,
-    private readonly eventParser: BlockchainEventParser,
+    private readonly contractEventValidator: ContractEventValidatorService,
   ) {}
 
   async handle(event: RawBlockchainEvent): Promise<boolean> {
@@ -39,31 +49,45 @@ export class YieldHandler {
       return false;
     }
 
-    // ── Structural validation ────────────────────────────────────────────────
-    const structuralFailure = this.eventParser.validateEventStructure(event);
-    if (structuralFailure) {
-      await this.eventParser.quarantineEvent(
-        event,
-        structuralFailure.reason,
-        structuralFailure.errorDetails,
-        'Yield',
-      );
-      return true;
+    const eventId = this.resolveEventId(event);
+    const ledgerSequence =
+      typeof event.ledger === 'number' ? event.ledger : null;
+    const contractId =
+      typeof event.contractId === 'string' ? event.contractId : null;
+    const validationCtx = {
+      handlerName: 'YieldHandler',
+      eventId,
+      ledgerSequence,
+      contractId,
+    };
+
+    // Validate the raw event envelope before any decoding
+    this.contractEventValidator.validateEnvelope(event, validationCtx);
+
+    let payload: YieldPayload;
+    try {
+      payload = this.extractPayload(event.value);
+    } catch (err) {
+      this.logger.error('YieldHandler: failed to extract payload', {
+        handlerName: 'YieldHandler',
+        eventId,
+        ledgerSequence,
+        error: (err as Error).message,
+      });
+      throw err;
     }
 
-    // ── Payload parsing ──────────────────────────────────────────────────────
-    const parseResult = this.eventParser.parseStandardPayload(event, {
-      eventType: 'Yield',
-      publicKeyFields: ['publicKey', 'userPublicKey', 'user', 'address'],
-      amountFields: [
-        'amount',
-        'yield',
-        'interest',
-        'user_yield',
-        'actual_yield',
-        'payout',
-      ],
-    });
+    // Validate the decoded payload against the Yield schema
+    this.contractEventValidator.validatePayload(
+      'Yield',
+      payload as unknown as Record<string, unknown>,
+      validationCtx,
+    );
+
+    await this.dataSource.transaction(async (manager) => {
+      const userRepo = manager.getRepository(User);
+      const txRepo = manager.getRepository(LedgerTransaction);
+      const subRepo = manager.getRepository(UserSubscription);
 
     if (!parseResult.ok) {
       await this.eventParser.quarantineEvent(
@@ -92,30 +116,19 @@ export class YieldHandler {
           ],
         });
 
-        if (!user) {
-          throw new Error(
-            `Cannot map yield publicKey to user: ${publicKey}`,
-          );
-        }
-
-        const existingTx = await txRepo.findOne({ where: { eventId } });
-        if (existingTx) {
-          this.logger.debug(
-            `Yield event ${eventId} already persisted. Skipping.`,
-          );
-          return;
-        }
-
-        const createdTx = await this.transactionStateMachine.createTransaction(
-          {
-            userId: user.id,
-            type: LedgerTransactionType.YIELD,
-            amount,
-            publicKey,
-            eventId,
-            txHash,
-            ledgerSequence,
-            metadata: rawMeta,
+      const createdTx = await this.transactionStateMachine.createTransaction(
+        {
+          userId: user.id,
+          type: LedgerTransactionType.YIELD,
+          amount: payload.amount,
+          publicKey: payload.publicKey,
+          eventId,
+          txHash: typeof event.txHash === 'string' ? event.txHash : null,
+          ledgerSequence:
+            typeof event.ledger === 'number' ? String(event.ledger) : null,
+          metadata: {
+            topic: event.topic,
+            rawValueType: typeof event.value,
           },
           {
             manager,

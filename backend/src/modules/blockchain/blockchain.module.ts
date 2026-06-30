@@ -31,6 +31,7 @@ import { JobQueueModule } from '../job-queue/job-queue.module';
 import { EventStreamBackpressureService } from './event-stream-backpressure.service';
 import { ProtocolMetrics } from '../admin-analytics/entities/protocol-metrics.entity';
 import { TransactionsModule } from '../transactions/transactions.module';
+import { ContractEventValidatorService } from './contract-event-validator.service';
 
 @Global()
 @Module({
@@ -74,7 +75,7 @@ import { TransactionsModule } from '../transactions/transactions.module';
     YieldHandler,
     BalanceSyncService,
     EventStreamBackpressureService,
-    BlockchainEventParser,
+    ContractEventValidatorService,
   ],
   exports: [
     StellarService,
@@ -89,7 +90,7 @@ import { TransactionsModule } from '../transactions/transactions.module';
     YieldHandler,
     BalanceSyncService,
     EventStreamBackpressureService,
-    BlockchainEventParser,
+    ContractEventValidatorService,
   ],
 })
 export class BlockchainModule {}

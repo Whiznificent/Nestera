@@ -14,11 +14,21 @@ import {
 } from '../../savings/entities/user-subscription.entity';
 import { User } from '../../user/entities/user.entity';
 import { TransactionStateMachineService } from '../../transactions/transaction-state-machine.service';
-import {
-  BlockchainEventParser,
-  RawBlockchainEvent,
-} from '../blockchain-event-parser.service';
-import { QuarantineReason } from '../entities/malformed-blockchain-event.entity';
+import { ContractEventValidatorService } from '../contract-event-validator.service';
+
+interface IndexerEvent {
+  id?: string;
+  topic?: unknown[];
+  value?: unknown;
+  txHash?: string;
+  ledger?: number;
+  [key: string]: unknown;
+}
+
+interface WithdrawPayload {
+  publicKey: string;
+  amount: string;
+}
 
 @Injectable()
 export class WithdrawHandler {
@@ -30,7 +40,7 @@ export class WithdrawHandler {
   constructor(
     @InjectDataSource() private readonly dataSource: DataSource,
     private readonly transactionStateMachine: TransactionStateMachineService,
-    private readonly eventParser: BlockchainEventParser,
+    private readonly contractEventValidator: ContractEventValidatorService,
   ) {}
 
   async handle(event: RawBlockchainEvent): Promise<boolean> {
@@ -38,31 +48,45 @@ export class WithdrawHandler {
       return false;
     }
 
-    // ── Structural validation ────────────────────────────────────────────────
-    const structuralFailure = this.eventParser.validateEventStructure(event);
-    if (structuralFailure) {
-      await this.eventParser.quarantineEvent(
-        event,
-        structuralFailure.reason,
-        structuralFailure.errorDetails,
-        'Withdraw',
-      );
-      return true;
+    const eventId = this.resolveEventId(event);
+    const ledgerSequence =
+      typeof event.ledger === 'number' ? event.ledger : null;
+    const contractId =
+      typeof event.contractId === 'string' ? event.contractId : null;
+    const validationCtx = {
+      handlerName: 'WithdrawHandler',
+      eventId,
+      ledgerSequence,
+      contractId,
+    };
+
+    // Validate the raw event envelope before any decoding
+    this.contractEventValidator.validateEnvelope(event, validationCtx);
+
+    let payload: WithdrawPayload;
+    try {
+      payload = this.extractPayload(event.value);
+    } catch (err) {
+      this.logger.error('WithdrawHandler: failed to extract payload', {
+        handlerName: 'WithdrawHandler',
+        eventId,
+        ledgerSequence,
+        error: (err as Error).message,
+      });
+      throw err;
     }
 
-    // ── Payload parsing ──────────────────────────────────────────────────────
-    const parseResult = this.eventParser.parseStandardPayload(event, {
-      eventType: 'Withdraw',
-      publicKeyFields: [
-        'publicKey',
-        'userPublicKey',
-        'user',
-        'address',
-        'to',
-        'from',
-      ],
-      amountFields: ['amount', 'value', 'amt'],
-    });
+    // Validate the decoded payload against the Withdraw schema
+    this.contractEventValidator.validatePayload(
+      'Withdraw',
+      payload as unknown as Record<string, unknown>,
+      validationCtx,
+    );
+
+    await this.dataSource.transaction(async (manager) => {
+      const userRepo = manager.getRepository(User);
+      const txRepo = manager.getRepository(LedgerTransaction);
+      const subRepo = manager.getRepository(UserSubscription);
 
     if (!parseResult.ok) {
       await this.eventParser.quarantineEvent(
@@ -91,11 +115,55 @@ export class WithdrawHandler {
           ],
         });
 
-        if (!user) {
-          throw new Error(
-            `Cannot map withdraw publicKey to user: ${publicKey}`,
-          );
-        }
+      const createdTx = await this.transactionStateMachine.createTransaction(
+        {
+          userId: user.id,
+          type: LedgerTransactionType.WITHDRAW,
+          amount: payload.amount,
+          publicKey: payload.publicKey,
+          eventId,
+          txHash: typeof event.txHash === 'string' ? event.txHash : null,
+          ledgerSequence:
+            typeof event.ledger === 'number' ? String(event.ledger) : null,
+          metadata: {
+            topic: event.topic,
+            rawValueType: typeof event.value,
+          },
+        },
+        {
+          manager,
+          actor: 'blockchain-indexer',
+          reason: 'Withdraw event ingested',
+          metadata: { eventId },
+        },
+      );
+      await this.transactionStateMachine.transitionStatus(
+        createdTx.id,
+        LedgerTransactionStatus.PENDING_CONFIRMATION,
+        {
+          manager,
+          actor: 'blockchain-indexer',
+          reason: 'Withdraw pending confirmation',
+        },
+      );
+      await this.transactionStateMachine.transitionStatus(
+        createdTx.id,
+        LedgerTransactionStatus.CONFIRMED,
+        {
+          manager,
+          actor: 'blockchain-indexer',
+          reason: 'Withdraw confirmed on ledger',
+        },
+      );
+      await this.transactionStateMachine.transitionStatus(
+        createdTx.id,
+        LedgerTransactionStatus.COMPLETED,
+        {
+          manager,
+          actor: 'blockchain-indexer',
+          reason: 'Withdraw workflow completed',
+        },
+      );
 
         const existingTx = await txRepo.findOne({ where: { eventId } });
         if (existingTx) {

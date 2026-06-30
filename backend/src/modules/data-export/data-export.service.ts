@@ -288,7 +288,15 @@ export class DataExportService {
       ]);
 
       const zipPath = path.join(EXPORT_DIR, `${request.id}.zip`);
+      const exportedAt = new Date().toISOString();
       await this.buildZip(zipPath, {
+        'WATERMARK.json': {
+          userId: user.id,
+          requestId: request.id,
+          exportedAt,
+          _notice:
+            'This export was generated exclusively for the user identified above. Unauthorized redistribution is prohibited.',
+        },
         'profile.json': {
           id: user.id,
           email: user.email,

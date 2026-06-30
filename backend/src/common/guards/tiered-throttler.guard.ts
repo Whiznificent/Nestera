@@ -41,6 +41,7 @@ const TIER_LIMITS: Record<
     vote: { limit: 5, ttl: 60_000 },
     upload: { limit: 10, ttl: 60_000 },
     'admin-high-risk': { limit: 0, ttl: 5 * 60 * 1000 }, // Not allowed
+    'webhook-ingest': { limit: 30, ttl: 60_000 },
   },
   [UserTier.VERIFIED]: {
     default: { limit: 150, ttl: 60000 },
@@ -52,6 +53,7 @@ const TIER_LIMITS: Record<
     vote: { limit: 10, ttl: 60_000 },
     upload: { limit: 30, ttl: 60_000 },
     'admin-high-risk': { limit: 0, ttl: 5 * 60 * 1000 }, // Not allowed
+    'webhook-ingest': { limit: 60, ttl: 60_000 },
   },
   [UserTier.PREMIUM]: {
     default: { limit: 300, ttl: 60000 },
@@ -63,6 +65,7 @@ const TIER_LIMITS: Record<
     vote: { limit: 20, ttl: 60_000 },
     upload: { limit: 60, ttl: 60_000 },
     'admin-high-risk': { limit: 0, ttl: 5 * 60 * 1000 }, // Not allowed
+    'webhook-ingest': { limit: 120, ttl: 60_000 },
   },
   [UserTier.ENTERPRISE]: {
     default: { limit: 1000, ttl: 60000 },
@@ -74,6 +77,7 @@ const TIER_LIMITS: Record<
     vote: { limit: 30, ttl: 60_000 },
     upload: { limit: 120, ttl: 60_000 },
     'admin-high-risk': { limit: 0, ttl: 5 * 60 * 1000 }, // Not allowed
+    'webhook-ingest': { limit: 300, ttl: 60_000 },
   },
   [UserTier.ADMIN]: {
     default: { limit: 1000, ttl: 60000 },
@@ -85,6 +89,7 @@ const TIER_LIMITS: Record<
     vote: { limit: 30, ttl: 60_000 },
     upload: { limit: 240, ttl: 60_000 },
     'admin-high-risk': { limit: 2, ttl: 5 * 60 * 1000 }, // 2 per 5 minutes
+    'webhook-ingest': { limit: 600, ttl: 60_000 },
   },
 };
 

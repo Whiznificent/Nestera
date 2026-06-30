@@ -17,6 +17,7 @@ import { WebhookSignatureVerifier } from './security/webhook-signature-verifier'
 import { ReplayNonceStore } from './security/replay-nonce-store';
 import { WebhookAllowlistService } from './security/webhook-allowlist.service';
 import { WebhookVerificationMiddleware } from './middleware/webhook-verification.middleware';
+import { WebhookIngestGuard } from './security/webhook-ingest.guard';
 import { MetricsService } from '../../common/metrics/metrics.service';
 
 @Module({
@@ -36,6 +37,7 @@ import { MetricsService } from '../../common/metrics/metrics.service';
     ReplayNonceStore,
     WebhookAllowlistService,
     WebhookVerificationMiddleware,
+    WebhookIngestGuard,
     MetricsService,
   ],
   exports: [WebhookService, WebhookAllowlistService, WebhookSignatureVerifier],

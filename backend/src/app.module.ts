@@ -151,6 +151,16 @@ const envValidationSchema = Joi.object({
   JSON_BODY_LIMIT: Joi.string().default('1mb'),
   URLENCODED_BODY_LIMIT: Joi.string().default('1mb'),
 
+  TIMEOUT_WEBHOOK_DELIVERY_MS: Joi.number().integer().min(1000).default(10000),
+  TIMEOUT_WEBHOOK_INGEST_MS: Joi.number().integer().min(500).default(5000),
+  TIMEOUT_HTTP_CLIENT_MS: Joi.number().integer().min(1000).default(15000),
+  WEBHOOK_MAX_PENDING_DELIVERIES: Joi.number().integer().min(1).default(500),
+  WEBHOOK_INGEST_RATE_LIMIT_PER_MINUTE: Joi.number()
+    .integer()
+    .min(1)
+    .default(30),
+  WEBHOOK_MAX_INGEST_QUEUE_DEPTH: Joi.number().integer().min(1).default(1000),
+
   IDEMPOTENCY_CLEANUP_ENABLED: Joi.boolean().default(true),
   IDEMPOTENCY_CLEANUP_CRON: Joi.string()
     .regex(/^(\S+\s+){4}\S+$/)
@@ -413,6 +423,15 @@ const envValidationSchema = Joi.object({
         name: 'admin-high-risk',
         ttl: 5 * 60 * 1000, // 5 minutes
         limit: 2,
+      },
+      {
+        // Inbound webhook ingest (e.g. /webhooks/stellar).
+        // 30 requests per minute per sender/IP — tight enough to defeat
+        // spam floods but generous enough to allow legitimate bursts.
+        // Tune via WEBHOOK_INGEST_RATE_LIMIT_PER_MINUTE env var.
+        name: 'webhook-ingest',
+        ttl: 60_000, // 1 minute
+        limit: 30,
       },
     ]),
   ],

@@ -8,12 +8,15 @@ import {
   Logger,
   HttpCode,
   HttpStatus,
+  UseGuards,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { Throttle } from '@nestjs/throttler';
 import * as crypto from 'crypto';
 import { Request } from 'express';
 import { Idempotent } from '../../common/decorators/idempotent.decorator';
 import { WebhookAllowlistService } from './security/webhook-allowlist.service';
+import { WebhookIngestGuard } from './security/webhook-ingest.guard';
 
 @Controller('webhooks/stellar')
 export class StellarWebhookController {
@@ -27,6 +30,8 @@ export class StellarWebhookController {
   @Post()
   @HttpCode(HttpStatus.OK)
   @Idempotent({ ttlSeconds: 86400 })
+  @Throttle({ 'webhook-ingest': { limit: 30, ttl: 60_000 } })
+  @UseGuards(WebhookIngestGuard)
   async handleWebhook(
     @Req() req: Request,
     @Body() payload: any,

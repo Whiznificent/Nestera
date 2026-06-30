@@ -101,6 +101,33 @@ export default () => ({
     ),
     backoffDelay: parseInt(process.env.JOB_QUEUE_BACKOFF_DELAY || '2000', 10),
   },
+  webhook: {
+    /**
+     * Maximum number of PENDING outbound deliveries allowed before
+     * new dispatch calls are shed (backpressure).  Default: 500.
+     */
+    maxPendingDeliveries: parseInt(
+      process.env.WEBHOOK_MAX_PENDING_DELIVERIES || '500',
+      10,
+    ),
+    /**
+     * Maximum inbound webhook requests per sender/IP per minute before
+     * the rate-limiter rejects with 429.  Default: 30.
+     */
+    ingestRateLimitPerMinute: parseInt(
+      process.env.WEBHOOK_INGEST_RATE_LIMIT_PER_MINUTE || '30',
+      10,
+    ),
+    /**
+     * Maximum number of PENDING outbound deliveries allowed before the
+     * WebhookIngestGuard rejects inbound requests with 503 (backpressure).
+     * Default: 1000.
+     */
+    maxIngestQueueDepth: parseInt(
+      process.env.WEBHOOK_MAX_INGEST_QUEUE_DEPTH || '1000',
+      10,
+    ),
+  },
   mail: {
     host: process.env.MAIL_HOST,
     port: parseInt(process.env.MAIL_PORT || '587', 10),
@@ -240,6 +267,35 @@ export default () => ({
      */
     cleanupLockTtlMs: parseInt(
       process.env.IDEMPOTENCY_CLEANUP_LOCK_TTL_MS || '120000',
+      10,
+    ),
+  },
+  timeouts: {
+    /**
+     * Outbound webhook delivery — how long we wait for a subscriber's
+     * endpoint to respond before treating the delivery as failed.
+     * Default: 10 s.  Tune per-environment via TIMEOUT_WEBHOOK_DELIVERY_MS.
+     */
+    webhookDeliveryMs: parseInt(
+      process.env.TIMEOUT_WEBHOOK_DELIVERY_MS || '10000',
+      10,
+    ),
+    /**
+     * Inbound webhook ingest — maximum time (ms) the verification
+     * middleware + controller handler may run before the request is
+     * aborted.  Protects against slow-loris or stalled DB calls on the
+     * ingest path.  Default: 5 s.
+     */
+    webhookIngestMs: parseInt(
+      process.env.TIMEOUT_WEBHOOK_INGEST_MS || '5000',
+      10,
+    ),
+    /**
+     * Default HTTP client timeout used by any service that does not
+     * have an explicit per-endpoint override.  Default: 15 s.
+     */
+    httpClientMs: parseInt(
+      process.env.TIMEOUT_HTTP_CLIENT_MS || '15000',
       10,
     ),
   },

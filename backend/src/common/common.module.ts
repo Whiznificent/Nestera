@@ -21,6 +21,7 @@ import { DataScopeService } from './services/data-scope.service';
 import { DistributedLockModule } from './distributed-lock/distributed-lock.module';
 import { TestModeModule } from './test-mode/test-mode.module';
 import { EventualConsistencyService } from './services/eventual-consistency.service';
+import { WorkflowIdempotencyService } from './services/workflow-idempotency.service';
 
 @Global()
 @Module({
@@ -46,6 +47,7 @@ import { EventualConsistencyService } from './services/eventual-consistency.serv
     TenantContextMiddleware,
     DataScopeService,
     EventualConsistencyService,
+    WorkflowIdempotencyService,
   ],
   exports: [
     RateLimitMonitorService,
@@ -62,6 +64,7 @@ import { EventualConsistencyService } from './services/eventual-consistency.serv
     DataScopeService,
     DistributedLockModule,
     EventualConsistencyService,
+    WorkflowIdempotencyService,
   ],
 })
 export class CommonModule {}

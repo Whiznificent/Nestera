@@ -7,6 +7,8 @@ import {
   Inject,
   Optional,
 } from '@nestjs/common';
+import { ResourceNotFoundException, ResourcePendingIndexingException } from '../../common/exceptions/domain.exception';
+import { EventualConsistencyService } from '../../common/services/eventual-consistency.service';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { ConfigService } from '@nestjs/config';
 import { Cache } from 'cache-manager';
@@ -137,6 +139,7 @@ export class SavingsService {
     private readonly auditLogService: AuditLogService,
     @Optional() readonly tracingService?: DistributedTracingService,
     @Optional() private readonly eventEmitter?: EventEmitter2,
+    @Optional() private readonly eventualConsistencyService?: EventualConsistencyService,
   ) {}
 
   @TraceSpan('savings.createProduct')
@@ -324,7 +327,7 @@ export class SavingsService {
   async findOneProduct(id: string): Promise<SavingsProduct> {
     const product = await this.productRepository.findOneBy({ id });
     if (!product) {
-      throw new NotFoundException(`Savings product ${id} not found`);
+      throw new ResourceNotFoundException('Savings product', id);
     }
     return product;
   }

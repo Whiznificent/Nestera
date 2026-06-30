@@ -24,6 +24,19 @@ export interface CursorPayload {
 }
 
 /**
+ * Human-friendly description of the cursor format, surfaced in error
+ * responses so clients can self-correct without consulting external docs
+ * (issue #1136).
+ *
+ * The cursor is intentionally opaque — clients MUST NOT parse or construct
+ * cursor values. Pass back the exact value returned in `meta.nextCursor`.
+ */
+export const CURSOR_FORMAT_HINT =
+  'A valid cursor is an opaque, URL-safe base64-encoded JSON object of the shape ' +
+  '{"createdAt":"<ISO 8601 timestamp>","id":"<UUID>"}. Pass back the exact value ' +
+  "returned in the previous response's meta.nextCursor; never construct a cursor manually.";
+
+/**
  * Encodes a {@link CursorPayload} into a URL-safe base64 string.
  *
  * The cursor is intentionally opaque to API consumers — its internal structure
@@ -42,9 +55,11 @@ export function encodeCursor(payload: CursorPayload): string {
 /**
  * Decodes a cursor string back into a {@link CursorPayload}.
  *
- * Throws {@link BadRequestException} (HTTP 400) if the cursor is malformed,
- * missing required fields, or contains an invalid timestamp. This prevents
- * silent data corruption from hand-crafted or expired cursors.
+ * Throws {@link BadRequestException} (HTTP 400) with a structured payload
+ * (message + hint + field) if the cursor is malformed, missing required
+ * fields, or contains an invalid timestamp. This prevents silent data
+ * corruption from hand-crafted or expired cursors and gives clients an
+ * actionable hint about the expected cursor format.
  *
  * @throws {BadRequestException} when the cursor cannot be parsed or validated.
  *
@@ -67,6 +82,10 @@ export function decodeCursor(cursor: string): CursorPayload {
     }
     return payload;
   } catch {
-    throw new BadRequestException('Invalid pagination cursor');
+    throw new BadRequestException({
+      message: 'Invalid pagination cursor',
+      hint: CURSOR_FORMAT_HINT,
+      field: 'cursor',
+    });
   }
 }

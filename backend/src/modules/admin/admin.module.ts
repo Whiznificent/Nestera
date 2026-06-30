@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { EventEmitterModule } from '@nestjs/event-emitter';
+import { ScheduleModule } from '@nestjs/schedule';
 import { UserModule } from '../user/user.module';
 import { SavingsModule } from '../savings/savings.module';
 import { MailModule } from '../mail/mail.module';
@@ -13,6 +14,8 @@ import { AdminWaitlistController } from './admin-waitlist.controller';
 import { AdminUsersController } from './admin-users.controller';
 import { AdminWithdrawalController } from './admin-withdrawal.controller';
 import { AdminWithdrawalService } from './admin-withdrawal.service';
+import { AdminWorkflowController } from './admin-workflow.controller';
+import { AdminEmergencyWithdrawalWorkflowController } from './admin-emergency-withdrawal-workflow.controller';
 
 import { CircuitBreakerController } from './circuit-breaker.controller';
 import { AdminDisputesController } from './admin-disputes.controller';
@@ -28,8 +31,12 @@ import { AdminNotificationsService } from './admin-notifications.service';
 import { AdminNotificationRateLimiterService } from './admin-notification-rate-limiter.service';
 import { AdminTransactionsService } from './admin-transactions.service';
 import { AdminConfirmationService } from './admin-confirmation.service';
+import { WorkflowService } from './workflow.service';
+import { WorkflowAuditService } from './workflow-audit.service';
+import { EmergencyWithdrawalWorkflowService } from './emergency-withdrawal-workflow.service';
 import { AdminTransactionNote } from './entities/admin-transaction-note.entity';
 import { AdminConfirmation } from './entities/admin-confirmation.entity';
+import { AdminWorkflow } from './entities/admin-workflow.entity';
 import { User } from '../user/entities/user.entity';
 import { UserSubscription } from '../savings/entities/user-subscription.entity';
 import { SavingsProduct } from '../savings/entities/savings-product.entity';
@@ -53,6 +60,7 @@ import { JobQueueModule } from '../job-queue/job-queue.module';
       Transaction,
       AdminTransactionNote,
       AdminConfirmation,
+      AdminWorkflow,
       Dispute,
       DisputeTimeline,
       Notification,
@@ -65,6 +73,7 @@ import { JobQueueModule } from '../job-queue/job-queue.module';
     NotificationsModule,
     JobQueueModule,
     EventEmitterModule,
+    ScheduleModule.forRoot(),
   ],
   controllers: [
     AdminController,
@@ -72,6 +81,8 @@ import { JobQueueModule } from '../job-queue/job-queue.module';
     AdminWaitlistController,
     AdminUsersController,
     AdminWithdrawalController,
+    AdminWorkflowController,
+    AdminEmergencyWithdrawalWorkflowController,
     AdminNotificationsController,
     AdminAuditLogsController,
     AdminTransactionsController,
@@ -86,11 +97,15 @@ import { JobQueueModule } from '../job-queue/job-queue.module';
     AdminTransactionsService,
     AdminWithdrawalService,
     AdminConfirmationService,
+    WorkflowService,
+    WorkflowAuditService,
+    EmergencyWithdrawalWorkflowService,
   ],
   exports: [
     AdminDisputesService,
     AdminAuditLogsService,
     AdminConfirmationService,
+    WorkflowService,
   ],
 })
 export class AdminModule {}

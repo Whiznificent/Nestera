@@ -59,6 +59,9 @@ jobs:
       - name: Generate OpenAPI and SDK artifacts
         run: pnpm run generate:api-sdk
 
+      - name: Run contract tests
+        run: cd backend && npm run test:contract
+
       - name: Upload generated SDK artifact
         uses: actions/upload-artifact@v4
         with:

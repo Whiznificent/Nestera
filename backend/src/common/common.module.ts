@@ -11,6 +11,7 @@ import { CompressionMetricsService } from './services/compression-metrics.servic
 import { CompressionMetricsMiddleware } from './middleware/compression.middleware';
 import { AuditLogService } from './services/audit-log.service';
 import { ContractCompatibilityService } from './services/contract-compatibility.service';
+import { ContractValidationService } from './services/contract-validation.service';
 import { TenantContextService } from './services/tenant-context.service';
 import { TenantContextMiddleware } from './middleware/tenant-context.middleware';
 import { CacheModule } from '../modules/cache/cache.module';
@@ -39,6 +40,7 @@ import { TestModeModule } from './test-mode/test-mode.module';
     CompressionMetricsMiddleware,
     AuditLogService,
     ContractCompatibilityService,
+    ContractValidationService,
     TenantContextService,
     TenantContextMiddleware,
     DataScopeService,
@@ -53,6 +55,7 @@ import { TestModeModule } from './test-mode/test-mode.module';
     CompressionMetricsService,
     AuditLogService,
     ContractCompatibilityService,
+    ContractValidationService,
     TenantContextService,
     DataScopeService,
     DistributedLockModule,

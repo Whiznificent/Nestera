@@ -311,4 +311,9 @@ export default () => ({
     jsonBodyLimit: process.env.JSON_BODY_LIMIT || '1mb',
     urlencodedBodyLimit: process.env.URLENCODED_BODY_LIMIT || '1mb',
   },
+  multiTenant: {
+    enabled: process.env.MULTI_TENANT_ENABLED === 'true',
+    defaultTenantId: process.env.DEFAULT_TENANT_ID || 'default',
+    defaultTenantSlug: process.env.DEFAULT_TENANT_SLUG || 'default',
+  },
 });

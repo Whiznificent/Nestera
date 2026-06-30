@@ -12,8 +12,8 @@ import {
 import { StorageHealthIndicator } from './indicators/storage.health';
 import { SystemHealthIndicator } from './indicators/system.health';
 import {
-  HealthCheckResult,
   HealthHistoryService,
+  HealthCheckResult,
 } from './health-history.service';
 import { ShutdownTrackedTask } from '../../common/decorators/shutdown-task.decorator';
 
@@ -67,12 +67,6 @@ export class HealthCollectorService {
     }
   }
 
-  private normalizeStatus(status: string): HealthCheckResult['status'] {
-    if (status === 'up') return 'up';
-    if (status === 'degraded') return 'degraded';
-    return 'down';
-  }
-
   async runChecks(): Promise<HealthCheckResult[]> {
     const timestamp = new Date();
     const results = await Promise.allSettled(
@@ -82,9 +76,15 @@ export class HealthCollectorService {
           const value = await check();
           const entry = value[name] as Record<string, unknown> | undefined;
           const status = (entry?.status as string) ?? 'up';
+          const normalizedStatus: HealthCheckResult['status'] =
+            status === 'up'
+              ? 'up'
+              : status === 'degraded'
+                ? 'degraded'
+                : 'down';
           return {
             service: name,
-            status: this.normalizeStatus(status),
+            status: normalizedStatus,
             responseTime: Date.now() - start,
             timestamp,
             error: entry?.message as string | undefined,

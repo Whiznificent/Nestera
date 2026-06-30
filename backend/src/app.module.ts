@@ -106,6 +106,10 @@ const envValidationSchema = Joi.object({
   JWT_SECRET: Joi.string().min(10).required(),
   JWT_EXPIRATION: Joi.string().required(),
 
+  MULTI_TENANT_ENABLED: Joi.boolean().default(false),
+  DEFAULT_TENANT_ID: Joi.string().optional(),
+  DEFAULT_TENANT_SLUG: Joi.string().optional(),
+
   STELLAR_NETWORK: Joi.string().valid('testnet', 'mainnet').default('testnet'),
   SOROBAN_RPC_URL: Joi.string().uri().required(),
   HORIZON_URL: Joi.string().uri().required(),
@@ -350,6 +354,20 @@ const envValidationSchema = Joi.object({
         limit: 5,
       },
       {
+        // OTP / 2FA verification attempts — deliberately strict to resist
+        // brute-force attacks on one-time codes.
+        name: 'otp',
+        ttl: 15 * 60 * 1000, // 15 minutes
+        limit: 3,
+      },
+      {
+        // Wallet-linking is an infrequent, sensitive operation.
+        // 5 attempts per hour per user prevents automated wallet-spam.
+        name: 'wallet-link',
+        ttl: 60 * 60 * 1000, // 1 hour
+        limit: 5,
+      },
+      {
         name: 'rpc',
         ttl: 60000, // 1 minute
         limit: 10,
@@ -425,7 +443,7 @@ const envValidationSchema = Joi.object({
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
     consumer
-      .apply(CorrelationIdMiddleware, CompressionMetricsMiddleware)
+      .apply(CorrelationIdMiddleware, CompressionMetricsMiddleware, TenantContextMiddleware)
       .forRoutes('*');
   }
 }

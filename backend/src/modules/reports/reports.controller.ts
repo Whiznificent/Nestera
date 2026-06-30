@@ -25,6 +25,7 @@ import { Response } from 'express';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { JobQueueService } from '../job-queue/job-queue.service';
+import { AsyncResponseBuilder } from '../../common/dto';
 
 @ApiTags('reports')
 @Controller('reports')
@@ -81,12 +82,16 @@ export class ReportsController {
       params: { year, format, irs1099: irs1099 === 'true' },
     });
 
-    return {
-      success: true,
-      statusCode: 202,
-      message: 'Report generation queued',
-      data: { jobId: job.id },
-    };
+    return new AsyncResponseBuilder(
+      job.id,
+      `/reports/jobs/${job.id}/status`,
+    )
+      .setMessage('Tax report generation queued successfully')
+      .setRetryAfterSeconds(10)
+      .setOperationType('report-generation')
+      .setStatus('pending')
+      .setMetadata({ reportType: 'tax', year, format })
+      .build();
   }
 
   @Post('schedules')

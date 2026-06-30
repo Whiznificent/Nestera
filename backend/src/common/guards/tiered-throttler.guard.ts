@@ -4,6 +4,8 @@ import {
   Inject,
   Logger,
   Optional,
+  HttpException,
+  HttpStatus,
 } from '@nestjs/common';
 import { ThrottlerGuard, ThrottlerException } from '@nestjs/throttler';
 import { Request, Response } from 'express';
@@ -32,6 +34,8 @@ const TIER_LIMITS: Record<
   [UserTier.FREE]: {
     default: { limit: 60, ttl: 60000 },
     auth: { limit: 5, ttl: 15 * 60 * 1000 },
+    otp: { limit: 3, ttl: 15 * 60 * 1000 },
+    'wallet-link': { limit: 3, ttl: 60 * 60 * 1000 },
     rpc: { limit: 5, ttl: 60000 },
     export: { limit: 1, ttl: 15 * 60 * 1000 },
     vote: { limit: 5, ttl: 60_000 },
@@ -40,6 +44,8 @@ const TIER_LIMITS: Record<
   [UserTier.VERIFIED]: {
     default: { limit: 150, ttl: 60000 },
     auth: { limit: 10, ttl: 15 * 60 * 1000 },
+    otp: { limit: 5, ttl: 15 * 60 * 1000 },
+    'wallet-link': { limit: 5, ttl: 60 * 60 * 1000 },
     rpc: { limit: 15, ttl: 60000 },
     export: { limit: 3, ttl: 15 * 60 * 1000 },
     vote: { limit: 10, ttl: 60_000 },
@@ -48,6 +54,8 @@ const TIER_LIMITS: Record<
   [UserTier.PREMIUM]: {
     default: { limit: 300, ttl: 60000 },
     auth: { limit: 15, ttl: 15 * 60 * 1000 },
+    otp: { limit: 5, ttl: 15 * 60 * 1000 },
+    'wallet-link': { limit: 10, ttl: 60 * 60 * 1000 },
     rpc: { limit: 30, ttl: 60000 },
     export: { limit: 4, ttl: 15 * 60 * 1000 },
     vote: { limit: 20, ttl: 60_000 },
@@ -56,6 +64,8 @@ const TIER_LIMITS: Record<
   [UserTier.ENTERPRISE]: {
     default: { limit: 1000, ttl: 60000 },
     auth: { limit: 30, ttl: 15 * 60 * 1000 },
+    otp: { limit: 10, ttl: 15 * 60 * 1000 },
+    'wallet-link': { limit: 20, ttl: 60 * 60 * 1000 },
     rpc: { limit: 100, ttl: 60000 },
     export: { limit: 8, ttl: 15 * 60 * 1000 },
     vote: { limit: 30, ttl: 60_000 },
@@ -64,6 +74,8 @@ const TIER_LIMITS: Record<
   [UserTier.ADMIN]: {
     default: { limit: 1000, ttl: 60000 },
     auth: { limit: 50, ttl: 15 * 60 * 1000 },
+    otp: { limit: 20, ttl: 15 * 60 * 1000 },
+    'wallet-link': { limit: 20, ttl: 60 * 60 * 1000 },
     rpc: { limit: 100, ttl: 60000 },
     export: { limit: 6, ttl: 15 * 60 * 1000 },
     vote: { limit: 30, ttl: 60_000 },
@@ -166,6 +178,8 @@ export class TieredThrottlerGuard extends ThrottlerGuard {
       return result;
     } catch (error) {
       if (error instanceof ThrottlerException) {
+        const retryAfter = Math.ceil(tierLimits.ttl / 1000);
+        const resetAt = new Date(Date.now() + tierLimits.ttl).toISOString();
         this.logger.warn(
           `[Rate Limit] Tier: ${tier} | User: ${user?.id || 'anon'} | ` +
             `Route: ${request.method} ${request.path} | ` +
@@ -185,16 +199,26 @@ export class TieredThrottlerGuard extends ThrottlerGuard {
           timestamp: new Date(),
         });
 
-        response.setHeader('Retry-After', Math.ceil(tierLimits.ttl / 1000));
+        response.setHeader('Retry-After', retryAfter);
         response.setHeader('X-RateLimit-Remaining', 0);
         response.setHeader(
           'X-RateLimit-Reset',
-          new Date(Date.now() + tierLimits.ttl).toISOString(),
+          resetAt,
         );
 
-        throw new ThrottlerException(
-          `Rate limit exceeded for ${tier} tier. ` +
-            `Maximum ${tierLimits.limit} requests per ${Math.round(tierLimits.ttl / 1000)} seconds.`,
+        throw new HttpException(
+          {
+            success: false,
+            statusCode: HttpStatus.TOO_MANY_REQUESTS,
+            errorCode: 'THROTTLED',
+            message: `Rate limit exceeded for ${tier} tier.`,
+            endpoint: `${request.method} ${request.path}`,
+            retryAfter,
+            resetAt,
+            limit: tierLimits.limit,
+            ttl: tierLimits.ttl,
+          },
+          HttpStatus.TOO_MANY_REQUESTS,
         );
       }
       throw error;

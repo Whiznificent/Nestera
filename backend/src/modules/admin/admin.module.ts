@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { BullModule } from '@nestjs/bull';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { ScheduleModule } from '@nestjs/schedule';
 import { UserModule } from '../user/user.module';
@@ -64,7 +65,9 @@ import { JobQueueModule } from '../job-queue/job-queue.module';
       Dispute,
       DisputeTimeline,
       Notification,
+      AdminExportJob,
     ]),
+    BullModule.registerQueue({ name: ADMIN_EXPORT_QUEUE }),
     UserModule,
     SavingsModule,
     MailModule,
@@ -84,8 +87,9 @@ import { JobQueueModule } from '../job-queue/job-queue.module';
     AdminWorkflowController,
     AdminEmergencyWithdrawalWorkflowController,
     AdminNotificationsController,
-    AdminAuditLogsController,
     AdminTransactionsController,
+    AdminDisputesController,
+    AdminAuditLogsController,
   ],
   providers: [
     AdminUsersService,

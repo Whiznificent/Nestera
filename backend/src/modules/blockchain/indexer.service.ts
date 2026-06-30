@@ -255,9 +255,13 @@ export class IndexerService implements OnModuleInit {
       return true;
     } catch (err) {
       const msg = (err as Error).message;
-      this.logger.error(
-        `FAILURE at Ledger ${event.ledger}: Processing of event ${event.id} crashed. Error: ${msg}`,
-      );
+      this.logger.error('IndexerService: event processing failed', {
+        handlerName: 'IndexerService',
+        eventId: event.id ?? `${event.ledger}-${event.txHash}`,
+        ledgerSequence: event.ledger,
+        contractId: event.contractId ?? 'unknown',
+        error: msg,
+      });
 
       await this.dlqRepo.save(
         this.dlqRepo.create({

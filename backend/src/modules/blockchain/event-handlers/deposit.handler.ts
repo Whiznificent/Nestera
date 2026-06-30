@@ -47,8 +47,21 @@ export class DepositHandler {
       return false;
     }
 
-    const payload = this.extractPayload(event.value);
     const eventId = this.resolveEventId(event);
+    const ledgerSequence = typeof event.ledger === 'number' ? event.ledger : null;
+
+    let payload: DepositPayload;
+    try {
+      payload = this.extractPayload(event.value);
+    } catch (err) {
+      this.logger.error('DepositHandler: failed to extract payload', {
+        handlerName: 'DepositHandler',
+        eventId,
+        ledgerSequence,
+        error: (err as Error).message,
+      });
+      throw err;
+    }
 
     await this.dataSource.transaction(async (manager) => {
       const userRepo = manager.getRepository(User);
@@ -64,9 +77,14 @@ export class DepositHandler {
       });
 
       if (!user) {
-        throw new Error(
-          `Cannot map deposit payload publicKey to user: ${payload.publicKey}`,
-        );
+        const msg = `Cannot map deposit payload publicKey to user: ${payload.publicKey}`;
+        this.logger.error('DepositHandler: user resolution failed', {
+          handlerName: 'DepositHandler',
+          eventId,
+          ledgerSequence,
+          error: msg,
+        });
+        throw new Error(msg);
       }
 
       const existingTx = await txRepo.findOne({ where: { eventId } });
@@ -149,9 +167,15 @@ export class DepositHandler {
             });
 
         if (!defaultProduct) {
-          throw new Error(
-            'No savings product found to create subscription aggregate.',
-          );
+          const msg = 'No savings product found to create subscription aggregate.';
+          this.logger.error('DepositHandler: no savings product found', {
+            handlerName: 'DepositHandler',
+            eventId,
+            ledgerSequence,
+            userId: user.id,
+            error: msg,
+          });
+          throw new Error(msg);
         }
 
         subscription = subRepo.create({

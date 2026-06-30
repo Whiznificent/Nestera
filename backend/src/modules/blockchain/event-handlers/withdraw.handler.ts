@@ -46,8 +46,21 @@ export class WithdrawHandler {
       return false;
     }
 
-    const payload = this.extractPayload(event.value);
     const eventId = this.resolveEventId(event);
+    const ledgerSequence = typeof event.ledger === 'number' ? event.ledger : null;
+
+    let payload: WithdrawPayload;
+    try {
+      payload = this.extractPayload(event.value);
+    } catch (err) {
+      this.logger.error('WithdrawHandler: failed to extract payload', {
+        handlerName: 'WithdrawHandler',
+        eventId,
+        ledgerSequence,
+        error: (err as Error).message,
+      });
+      throw err;
+    }
 
     await this.dataSource.transaction(async (manager) => {
       const userRepo = manager.getRepository(User);
@@ -62,9 +75,14 @@ export class WithdrawHandler {
       });
 
       if (!user) {
-        throw new Error(
-          `Cannot map withdraw payload publicKey to user: ${payload.publicKey}`,
-        );
+        const msg = `Cannot map withdraw payload publicKey to user: ${payload.publicKey}`;
+        this.logger.error('WithdrawHandler: user resolution failed', {
+          handlerName: 'WithdrawHandler',
+          eventId,
+          ledgerSequence,
+          error: msg,
+        });
+        throw new Error(msg);
       }
 
       const existingTx = await txRepo.findOne({ where: { eventId } });
@@ -137,9 +155,15 @@ export class WithdrawHandler {
       });
 
       if (!subscription) {
-        throw new Error(
-          `No active subscription found for user ${user.id} to decrement withdrawal`,
-        );
+        const msg = `No active subscription found for user ${user.id} to decrement withdrawal`;
+        this.logger.error('WithdrawHandler: no active subscription', {
+          handlerName: 'WithdrawHandler',
+          eventId,
+          ledgerSequence,
+          userId: user.id,
+          error: msg,
+        });
+        throw new Error(msg);
       }
 
       // Decrement the amount natively in the database to ensure atomicity and precision

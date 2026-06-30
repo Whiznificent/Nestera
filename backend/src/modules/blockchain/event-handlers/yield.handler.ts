@@ -47,8 +47,21 @@ export class YieldHandler {
       return false;
     }
 
-    const payload = this.extractPayload(event.value);
     const eventId = this.resolveEventId(event);
+    const ledgerSequence = typeof event.ledger === 'number' ? event.ledger : null;
+
+    let payload: YieldPayload;
+    try {
+      payload = this.extractPayload(event.value);
+    } catch (err) {
+      this.logger.error('YieldHandler: failed to extract payload', {
+        handlerName: 'YieldHandler',
+        eventId,
+        ledgerSequence,
+        error: (err as Error).message,
+      });
+      throw err;
+    }
 
     await this.dataSource.transaction(async (manager) => {
       const userRepo = manager.getRepository(User);
@@ -63,9 +76,14 @@ export class YieldHandler {
       });
 
       if (!user) {
-        throw new Error(
-          `Cannot map yield payload publicKey to user: ${payload.publicKey}`,
-        );
+        const msg = `Cannot map yield payload publicKey to user: ${payload.publicKey}`;
+        this.logger.error('YieldHandler: user resolution failed', {
+          handlerName: 'YieldHandler',
+          eventId,
+          ledgerSequence,
+          error: msg,
+        });
+        throw new Error(msg);
       }
 
       const existingTx = await txRepo.findOne({ where: { eventId } });

@@ -15,6 +15,7 @@ import {
 import { User } from '../../user/entities/user.entity';
 import { SavingsProduct } from '../../savings/entities/savings-product.entity';
 import { TransactionStateMachineService } from '../../transactions/transaction-state-machine.service';
+import { ContractEventValidatorService } from '../contract-event-validator.service';
 
 interface IndexerEvent {
   id?: string;
@@ -40,6 +41,7 @@ export class DepositHandler {
   constructor(
     @InjectDataSource() private readonly dataSource: DataSource,
     private readonly transactionStateMachine: TransactionStateMachineService,
+    private readonly contractEventValidator: ContractEventValidatorService,
   ) {}
 
   async handle(event: IndexerEvent): Promise<boolean> {
@@ -48,7 +50,19 @@ export class DepositHandler {
     }
 
     const eventId = this.resolveEventId(event);
-    const ledgerSequence = typeof event.ledger === 'number' ? event.ledger : null;
+    const ledgerSequence =
+      typeof event.ledger === 'number' ? event.ledger : null;
+    const contractId =
+      typeof event.contractId === 'string' ? event.contractId : null;
+    const validationCtx = {
+      handlerName: 'DepositHandler',
+      eventId,
+      ledgerSequence,
+      contractId,
+    };
+
+    // Validate the raw event envelope before any decoding
+    this.contractEventValidator.validateEnvelope(event, validationCtx);
 
     let payload: DepositPayload;
     try {
@@ -62,6 +76,13 @@ export class DepositHandler {
       });
       throw err;
     }
+
+    // Validate the decoded payload against the Deposit schema
+    this.contractEventValidator.validatePayload(
+      'Deposit',
+      payload as unknown as Record<string, unknown>,
+      validationCtx,
+    );
 
     await this.dataSource.transaction(async (manager) => {
       const userRepo = manager.getRepository(User);
@@ -102,8 +123,7 @@ export class DepositHandler {
           amount: payload.amount,
           publicKey: payload.publicKey,
           eventId,
-          txHash:
-            typeof event.txHash === 'string' ? event.txHash : null,
+          txHash: typeof event.txHash === 'string' ? event.txHash : null,
           ledgerSequence:
             typeof event.ledger === 'number' ? String(event.ledger) : null,
           metadata: {
@@ -167,7 +187,8 @@ export class DepositHandler {
             });
 
         if (!defaultProduct) {
-          const msg = 'No savings product found to create subscription aggregate.';
+          const msg =
+            'No savings product found to create subscription aggregate.';
           this.logger.error('DepositHandler: no savings product found', {
             handlerName: 'DepositHandler',
             eventId,
